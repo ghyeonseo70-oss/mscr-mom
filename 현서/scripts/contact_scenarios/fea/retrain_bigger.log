@@ -1,0 +1,33 @@
+데이터 로드 중...
+n=150000
+학습 시작 (device=cuda, epochs=150, 큰 네트워크 + 코사인 LR 스케줄)...
+Epoch [ 10/150] ValAcc  74.8%  SegLoss 0.7421  ForceLoss 0.1535  LR 0.00148
+Epoch [ 20/150] ValAcc  80.2%  SegLoss 0.6179  ForceLoss 0.1565  LR 0.00144
+Epoch [ 30/150] ValAcc  77.4%  SegLoss 0.6764  ForceLoss 0.2185  LR 0.00136
+Epoch [ 40/150] ValAcc  72.9%  SegLoss 0.8644  ForceLoss 0.2516  LR 0.00125
+Epoch [ 50/150] ValAcc  72.5%  SegLoss 1.0230  ForceLoss 0.2997  LR 0.00113
+Epoch [ 60/150] ValAcc  80.0%  SegLoss 0.6772  ForceLoss 0.2918  LR 0.00099
+Epoch [ 70/150] ValAcc  83.6%  SegLoss 0.5129  ForceLoss 0.2838  LR 0.00083
+Epoch [ 80/150] ValAcc  83.9%  SegLoss 0.4728  ForceLoss 0.3300  LR 0.00068
+Epoch [ 90/150] ValAcc  65.4%  SegLoss 1.5311  ForceLoss 0.4220  LR 0.00052
+Epoch [100/150] ValAcc  80.2%  SegLoss 0.6734  ForceLoss 0.2897  LR 0.00038
+Epoch [110/150] ValAcc  61.0%  SegLoss 1.9542  ForceLoss 0.5148  LR 0.00026
+Epoch [120/150] ValAcc  79.9%  SegLoss 0.7309  ForceLoss 0.3559  LR 0.00015
+Epoch [130/150] ValAcc  71.6%  SegLoss 1.1919  ForceLoss 0.4030  LR 0.00007
+Epoch [140/150] ValAcc  75.9%  SegLoss 0.9731  ForceLoss 0.3755  LR 0.00003
+Epoch [150/150] ValAcc  70.4%  SegLoss 1.3438  ForceLoss 0.4763  LR 0.00001
+학습 완료 (696s), 최적 epoch=2
+
+=== 최종 검증 정확도: 81.6% (n_val=15000), 무작위 기준선=20.0% ===
+balanced accuracy: 83.1%
+구간별 recall: {'0-20mm': '96.3%', '20-40mm': '67.8%', '40-60mm': '78.5%', '60-80mm': '90.5%', '80-100mm': '82.2%'}
+[[1590   61    0    0    0]
+ [ 541 2274  538    3    0]
+ [   0  114 2618  602    2]
+ [   0    0  127 3032  190]
+ [   0    0    0  589 2719]]
+  Fx_board_N: R^2=0.961
+  Fy_board_N: R^2=0.889
+  F_mag(유도): R^2=0.917
+저장: /home/user/mscr-mom/현서/scripts/contact_scenarios/fea/../../../models/position_segment_classifier_bigger.pth
+총 소요시간: 11.6분

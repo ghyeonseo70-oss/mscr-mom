@@ -1,0 +1,14 @@
+대체모델 재학습 중...
+대체모델 완료
+각 케이스별 모델 예측 계산 중 (11프로브 스캔)...
+  L_M=25.0,phi=90.0,s=10.0mm -> 예측 s=4.6mm (오차 5.4mm)
+  L_M=75.0,phi=-90.0,s=20.0mm -> 예측 s=28.3mm (오차 8.3mm)
+  L_M=50.0,phi=90.0,s=50.0mm -> 예측 s=53.1mm (오차 3.1mm)
+  L_M=75.0,phi=120.0,s=70.0mm -> 예측 s=71.1mm (오차 1.1mm)
+  L_M=75.0,phi=-30.0,s=80.0mm -> 예측 s=80.5mm (오차 0.5mm)
+  L_M=0.0,phi=-90.0,s=10.0mm -> 예측 s=13.3mm (오차 3.3mm)
+Traceback (most recent call last):
+  File "/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/plot_s_regression_6panel.py", line 209, in <module>
+    normal = np.array([-np.cos(theta), np.sin(theta)])
+                               ^^^^^
+NameError: name 'theta' is not defined

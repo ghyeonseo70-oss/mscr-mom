@@ -1,0 +1,36 @@
+n=50000
+=== NN1 (CNN: deltaB -> 위치/각도 변화량 6개) 학습 시작 ===
+  NN1 Epoch [ 40/200] Val Loss 0.0437
+  NN1 Epoch [ 80/200] Val Loss 0.0261
+  NN1 Epoch [120/200] Val Loss 0.0217
+  NN1 Epoch [160/200] Val Loss 0.0342
+  NN1 Epoch [200/200] Val Loss 0.0214
+
+[NN1 결과 - 위치/각도 변화량 예측 정확도]
+  d_xL: R2=0.982  MAE=0.01887
+  d_yL: R2=0.986  MAE=0.03100
+  d_thL: R2=0.980  MAE=0.02968
+  d_xLM: R2=0.973  MAE=0.01147
+  d_yLM: R2=0.978  MAE=0.02104
+  d_thLM: R2=0.972  MAE=0.01875
+
+=== NN2 (MLP: 위치/각도변화량(진짜값)+L_M -> 접촉정보) 학습 시작 [이상적 상한선] ===
+  NN2 Epoch [ 40/200] Val Loss 0.1370
+  NN2 Epoch [ 80/200] Val Loss 0.1313
+  NN2 Epoch [120/200] Val Loss 0.1295
+  NN2 Epoch [160/200] Val Loss 0.1304
+  NN2 Epoch [200/200] Val Loss 0.1338
+
+[NN2 결과 - 이상적 상한선(진짜 위치/각도변화량 사용)]
+  s: R2=0.682  MAE=9.54697mm
+  F_mag: R2=0.866  MAE=0.00001N
+  Fx: R2=0.957  MAE=0.00001N
+  Fy: R2=0.953  MAE=0.00000N
+
+[엔드투엔드 결과 - NN1 예측값을 NN2에 그대로 넣음 (실제 배포 시나리오)]
+  s: R2=0.257  MAE=15.80798mm
+  F_mag: R2=0.615  MAE=0.00002N
+  Fx: R2=0.864  MAE=0.00001N
+  Fy: R2=0.883  MAE=0.00000N
+
+저장 완료: fea_nn1_position_shift.pth, fea_nn2_shape_to_contact.pth

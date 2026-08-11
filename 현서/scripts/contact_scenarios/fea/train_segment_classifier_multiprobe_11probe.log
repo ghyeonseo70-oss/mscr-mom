@@ -1,0 +1,44 @@
+대체모델 학습 데이터: 608개 (fea_lm_phi_pos_sweep_all.json, fea_bent_contact_sweep.json, fea_geom_sweep_all.json, fea_angle_sweep_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용, 타깃별) ===
+  tip_ux_avg_mm: R^2=0.956
+  tip_uy_avg_mm: R^2=0.978
+  tip_uz_avg_mm: R^2=0.855
+  tip_theta_deg_board: R^2=0.965
+  Fx_total_N: R^2=0.959
+  Fy_total_N: R^2=0.661
+  Fz_total_N: R^2=0.814
+  F_mag_N: R^2=0.982
+  (참고 RMSE, mm/deg/N 단위): tip_ux_avg_mm=0.0625, tip_uy_avg_mm=0.0240, tip_uz_avg_mm=0.0463, tip_theta_deg_board=0.0390
+대체모델 학습 완료 (154s)
+15만개 멀티프로브(11개 phi=[-150.0, -120.0, -90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0, 120.0, 150.0]) 합성 데이터 생성 시작 (32-way 병렬)...
+합성 데이터 생성 완료: 150000개 (6259s)
+구간별 샘플 수: {0: 16907, 1: 32960, 2: 33254, 3: 33348, 4: 33531}
+최종 분류기 학습 시작 (device=cuda)...
+Epoch [ 5/60] ValAcc  31.3%
+Epoch [10/60] ValAcc  30.5%
+Epoch [15/60] ValAcc  29.7%
+Epoch [20/60] ValAcc  29.3%
+Epoch [25/60] ValAcc  29.2%
+Epoch [30/60] ValAcc  28.7%
+Epoch [35/60] ValAcc  28.9%
+Epoch [40/60] ValAcc  28.1%
+Epoch [45/60] ValAcc  28.1%
+Epoch [50/60] ValAcc  28.0%
+Epoch [55/60] ValAcc  28.1%
+Epoch [60/60] ValAcc  28.3%
+학습 완료 (169s)
+
+=== 최종 검증 정확도: 28.3% (n_val=15000), 무작위 기준선=20.0% ===
+balanced accuracy(구간별 recall 평균): 28.7%
+구간별 recall: {'0-20mm': '33.1%', '20-40mm': '26.9%', '40-60mm': '23.1%', '60-80mm': '23.6%', '80-100mm': '36.6%'}
+
+혼동행렬 (행=실제, 열=예측, ['0-20mm', '20-40mm', '40-60mm', '60-80mm', '80-100mm']):
+[[ 591  599  254  179  160]
+ [ 295  870  732  640  697]
+ [ 115  666  755  765  961]
+ [  81  564  746  784 1148]
+ [  72  513  700  868 1245]]
+
+저장: /home/user/mscr-mom/현서/scripts/contact_scenarios/fea/../../../models/position_segment_classifier_multiprobe_150k_11probe.pth
+
+총 소요시간: 109.7분

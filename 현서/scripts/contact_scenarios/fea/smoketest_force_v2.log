@@ -1,0 +1,52 @@
+대체모델 학습 데이터: 608개 (fea_lm_phi_pos_sweep_all.json, fea_bent_contact_sweep.json, fea_geom_sweep_all.json, fea_angle_sweep_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용, 타깃별) ===
+  tip_ux_avg_mm: R^2=0.956
+  tip_uy_avg_mm: R^2=0.978
+  tip_uz_avg_mm: R^2=0.855
+  tip_theta_deg_board: R^2=0.965
+  Fx_total_N: R^2=0.959
+  Fy_total_N: R^2=0.661
+  Fz_total_N: R^2=0.814
+  F_mag_N: R^2=0.982
+  (참고 RMSE, mm/deg/N 단위): tip_ux_avg_mm=0.0625, tip_uy_avg_mm=0.0240, tip_uz_avg_mm=0.0463, tip_theta_deg_board=0.0390
+대체모델 학습 완료 (162s)
+15만개 멀티프로브(11개 phi=[-150.0, -120.0, -90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0, 120.0, 150.0]) 합성 데이터 생성 시작 (16-way 병렬)...
+합성 데이터 생성 완료: 2000개 (184s)
+구간별 샘플 수: {0: 193, 1: 421, 2: 485, 3: 463, 4: 438}
+최종 분류기 학습 시작 (device=cuda)...
+Epoch [ 5/60] ValAcc  32.0%  SegLoss 1.3410  ForceLoss 0.5785
+Epoch [10/60] ValAcc  43.5%  SegLoss 1.1727  ForceLoss 0.1433
+Epoch [15/60] ValAcc  55.5%  SegLoss 0.9247  ForceLoss 0.2301
+Epoch [20/60] ValAcc  49.5%  SegLoss 1.1655  ForceLoss 0.1236
+Epoch [25/60] ValAcc  39.5%  SegLoss 1.2414  ForceLoss 0.5075
+Epoch [30/60] ValAcc  43.5%  SegLoss 1.2539  ForceLoss 0.5158
+Epoch [35/60] ValAcc  59.5%  SegLoss 0.8353  ForceLoss 0.1655
+Epoch [40/60] ValAcc  54.0%  SegLoss 0.8993  ForceLoss 0.2112
+Epoch [45/60] ValAcc  67.0%  SegLoss 0.8545  ForceLoss 0.3033
+Epoch [50/60] ValAcc  62.5%  SegLoss 0.8730  ForceLoss 0.2323
+Epoch [55/60] ValAcc  64.0%  SegLoss 0.8531  ForceLoss 0.3616
+Epoch [60/60] ValAcc  59.0%  SegLoss 0.7943  ForceLoss 0.1531
+학습 완료 (3s), 최적 epoch=47 (val loss 기준)
+
+=== 최종 검증 정확도: 70.0% (n_val=200), 무작위 기준선=20.0% ===
+balanced accuracy(구간별 recall 평균): 72.4%
+구간별 recall: {'0-20mm': '87.5%', '20-40mm': '73.9%', '40-60mm': '54.5%', '60-80mm': '67.9%', '80-100mm': '78.0%'}
+
+혼동행렬 (행=실제, 열=예측, ['0-20mm', '20-40mm', '40-60mm', '60-80mm', '80-100mm']):
+[[14  2  0  0  0]
+ [ 8 34  3  0  1]
+ [ 0 12 24  7  1]
+ [ 0  0  7 36 10]
+ [ 0  0  1  8 32]]
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=200) ===
+  Fx_board_N: R^2=0.959, MAE=0.0014mN
+  Fy_board_N: R^2=0.615, MAE=0.0101mN
+  F_mag(유도, Fx-Fy만 기준 비교): R^2=0.699, MAE=0.0081mN
+  F_mag(참고, Fz포함 원래값과 비교): R^2=0.656, MAE=0.0115mN
+  (유도된 F_mag 중 음수 비율: 0.0% - sqrt라 구조적으로 항상 0)
+  힘 방향각(atan2(Fy,Fx), 유도값): 평균 오차 44.1도, 중앙값 23.0도
+
+저장: /home/user/mscr-mom/현서/scripts/contact_scenarios/fea/../../../models/position_segment_classifier_multiprobe_150k_11probe_force_v2.pth
+
+총 소요시간: 5.8분

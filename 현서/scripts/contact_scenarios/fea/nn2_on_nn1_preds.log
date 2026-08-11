@@ -1,0 +1,24 @@
+NN1(이미 학습됨) 로드해서 train/val 양쪽에 실제 예측값 뽑기...
+  (참고) NN1 train셋 자체 R2 d_xL: 0.983
+  (참고) NN1 train셋 자체 R2 d_yL: 0.988
+  (참고) NN1 train셋 자체 R2 d_thL: 0.983
+  (참고) NN1 train셋 자체 R2 d_xLM: 0.974
+  (참고) NN1 train셋 자체 R2 d_yLM: 0.979
+  (참고) NN1 train셋 자체 R2 d_thLM: 0.974
+
+=== NN2 (NN1의 실제 예측값으로 학습) 시작 ===
+  Epoch [ 40/200] Val Loss 0.2705
+  Epoch [ 80/200] Val Loss 0.2722
+  Epoch [120/200] Val Loss 0.2676
+  Epoch [160/200] Val Loss 0.2696
+  Epoch [200/200] Val Loss 0.2690
+
+[결과 - NN2를 NN1 실제 예측값으로 재학습한 엔드투엔드]
+  s: R2=0.400  MAE=14.64793mm
+  F_mag: R2=0.690  MAE=0.00002N
+  Fx: R2=0.904  MAE=0.00001N
+  Fy: R2=0.912  MAE=0.00000N
+
+(비교: 기존 방식 - NN2를 정답으로 학습 - 의 엔드투엔드: s=0.257, F_mag=0.615, Fx=0.864, Fy=0.883)
+(비교: direct CNN(노이즈 없음): s=0.417, F_mag=0.686, Fx=0.898, Fy=0.905)
+저장 완료

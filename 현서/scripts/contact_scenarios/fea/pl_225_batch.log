@@ -1,0 +1,115 @@
+Info    : Meshing 1D...
+Info    : [  0%] Meshing curve 1 (BSpline)
+Info    : [ 20%] Meshing curve 2 (Ellipse)
+Info    : [ 30%] Meshing curve 3 (Ellipse)
+Info    : [ 40%] Meshing curve 4 (BSpline)
+Info    : [ 50%] Meshing curve 5 (BSpline)
+Info    : [ 60%] Meshing curve 6 (BSpline)
+Info    : [ 70%] Meshing curve 7 (BSpline)
+Info    : [ 80%] Meshing curve 8 (BSpline)
+Info    : [ 90%] Meshing curve 9 (BSpline)
+Info    : Done meshing 1D (Wall 0.00602132s, CPU 0.006019s)
+Info    : Meshing 2D...
+Info    : [  0%] Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : [ 30%] Meshing surface 2 (Plane, Frontal-Delaunay)
+Info    : [ 50%] Meshing surface 3 (BSpline surface, Frontal-Delaunay)
+Info    : [ 70%] Meshing surface 4 (BSpline surface, Frontal-Delaunay)
+Info    : [ 90%] Meshing surface 5 (Plane, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.4785s, CPU 0.474485s)
+Info    : Meshing 3D...
+Info    : 3D Meshing 1 volume with 1 connected component
+Info    : Tetrahedrizing 12315 nodes...
+Info    : Done tetrahedrizing 12323 nodes (Wall 0.171356s, CPU 0.158302s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.40418s, CPU 0.372134s)
+Info    : Found volume 1
+Info    : It. 0 - 0 nodes created - worst tet radius 1.06196 (nodes removed 0 0)
+Info    : It. 500 - 500 nodes created - worst tet radius 1.00759 (nodes removed 0 0)
+Info    : It. 1000 - 1000 nodes created - worst tet radius 1.0005 (nodes removed 0 0)
+Info    : 3D refinement terminated (13447 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 45927 tetrahedra created in 0.037704 sec. (1218094 tets/s)
+Info    : 0 node relocations
+Info    : Done meshing 3D (Wall 0.655124s, CPU 0.622958s)
+Info    : Optimizing mesh...
+Info    : Optimizing volume 1
+Info    : Optimization starts (volume = 235.507) with worst = 0.000824966 / average = 0.688062:
+Info    : 0.00 < quality < 0.10 :       303 elements
+Info    : 0.10 < quality < 0.20 :       243 elements
+Info    : 0.20 < quality < 0.30 :      1140 elements
+Info    : 0.30 < quality < 0.40 :      1252 elements
+Info    : 0.40 < quality < 0.50 :      1735 elements
+Info    : 0.50 < quality < 0.60 :      3489 elements
+Info    : 0.60 < quality < 0.70 :     12836 elements
+Info    : 0.70 < quality < 0.80 :     17000 elements
+Info    : 0.80 < quality < 0.90 :      4343 elements
+Info    : 0.90 < quality < 1.00 :      3586 elements
+Info    : 1613 edge swaps, 27 node relocations (volume = 235.507): worst = 0.10807 / average = 0.7087 (Wall 0.0128719s, CPU 0.012841s)
+Info    : 1666 edge swaps, 29 node relocations (volume = 235.507): worst = 0.14997 / average = 0.709287 (Wall 0.0154242s, CPU 0.015395s)
+Info    : 1671 edge swaps, 29 node relocations (volume = 235.507): worst = 0.197439 / average = 0.70935 (Wall 0.017538s, CPU 0.017509s)
+Info    : 1672 edge swaps, 29 node relocations (volume = 235.507): worst = 0.281775 / average = 0.709367 (Wall 0.0196146s, CPU 0.019585s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         0 elements
+Info    : 0.20 < quality < 0.30 :         4 elements
+Info    : 0.30 < quality < 0.40 :       897 elements
+Info    : 0.40 < quality < 0.50 :      1418 elements
+Info    : 0.50 < quality < 0.60 :      4065 elements
+Info    : 0.60 < quality < 0.70 :     13145 elements
+Info    : 0.70 < quality < 0.80 :     16390 elements
+Info    : 0.80 < quality < 0.90 :      4849 elements
+Info    : 0.90 < quality < 1.00 :      3588 elements
+Info    : Done optimizing mesh (Wall 0.0445058s, CPU 0.044473s)
+Info    : 13820 nodes 70206 elements
+Info    : Meshing order 2 (curvilinear on)...
+Info    : [  0%] Meshing curve 1 order 2
+Info    : [ 10%] Meshing curve 2 order 2
+Info    : [ 20%] Meshing curve 3 order 2
+Info    : [ 30%] Meshing curve 4 order 2
+Info    : [ 30%] Meshing curve 5 order 2
+Info    : [ 40%] Meshing curve 6 order 2
+Info    : [ 50%] Meshing curve 7 order 2
+Info    : [ 50%] Meshing curve 8 order 2
+Info    : [ 60%] Meshing curve 9 order 2
+Info    : [ 70%] Meshing surface 1 order 2
+Info    : [ 70%] Meshing surface 2 order 2
+Info    : [ 80%] Meshing surface 3 order 2
+Info    : [ 90%] Meshing surface 4 order 2
+Info    : [ 90%] Meshing surface 5 order 2
+Info    : [100%] Meshing volume 1 order 2
+Info    : Surface mesh: worst distortion = 0.797589 (0 elements in ]0, 0.2]); worst gamma = 0.725635
+Info    : Volume mesh: worst distortion = 0.24714 (0 elements in ]0, 0.2])
+Info    : Done meshing order 2 (Wall 2.39231s, CPU 2.38975s)
+Info    : Writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/pl_225_mesh.inp'...
+Info    : Done writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/pl_225_mesh.inp'
+메쉬 생성 완료: 절점 84348개, N_FIXED=184, N_LOAD=20개 (목표점 [90.   94.87  3.  ], 반경 1.0mm)
+Traceback (most recent call last):
+  File "/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/batch_run_point_load.py", line 88, in <module>
+    worker_main(int(sys.argv[2]))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/batch_run_point_load.py", line 39, in worker_main
+    result = run_case(case)
+  File "/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/run_point_load.py", line 122, in run_case
+    result = run_ccx(job_name, timeout=timeout, n_threads=n_threads)
+  File "/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/run_contact.py", line 109, in run_ccx
+    result = subprocess.run(
+        ["ccx", job_name], capture_output=True, text=True, cwd=HERE, env=env, timeout=timeout
+    )
+  File "/home/user/anaconda3/lib/python3.13/subprocess.py", line 556, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/anaconda3/lib/python3.13/subprocess.py", line 1222, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/anaconda3/lib/python3.13/subprocess.py", line 2129, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/anaconda3/lib/python3.13/subprocess.py", line 1269, in _check_timeout
+    raise TimeoutExpired(
+    ...<2 lines>...
+            stderr=b''.join(stderr_seq) if stderr_seq else None)
+subprocess.TimeoutExpired: Command '['ccx', 'pl_225_job']' timed out after 1800 seconds

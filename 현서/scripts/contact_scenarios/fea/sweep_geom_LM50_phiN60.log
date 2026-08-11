@@ -1,0 +1,409 @@
+Info    : Meshing 1D...
+Info    : [  0%] Meshing curve 1 (BSpline)
+Info    : [ 10%] Meshing curve 2 (Ellipse)
+Info    : [ 20%] Meshing curve 3 (Ellipse)
+Info    : [ 30%] Meshing curve 4 (BSpline)
+Info    : [ 40%] Meshing curve 5 (BSpline)
+Info    : [ 50%] Meshing curve 6 (BSpline)
+Info    : [ 60%] Meshing curve 7 (BSpline)
+Info    : [ 60%] Meshing curve 8 (BSpline)
+Info    : [ 70%] Meshing curve 9 (BSpline)
+Info    : [ 90%] Meshing curve 11 (Circle)
+Info    : Done meshing 1D (Wall 0.0210963s, CPU 0.021054s)
+Info    : Meshing 2D...
+Info    : [  0%] Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : [ 20%] Meshing surface 2 (Plane, Frontal-Delaunay)
+Info    : [ 40%] Meshing surface 3 (BSpline surface, Frontal-Delaunay)
+Info    : [ 60%] Meshing surface 4 (BSpline surface, Frontal-Delaunay)
+Info    : [ 70%] Meshing surface 5 (Plane, Frontal-Delaunay)
+Info    : [ 90%] Meshing surface 6 (Sphere, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.756074s, CPU 0.751924s)
+Info    : Meshing 3D...
+Info    : 3D Meshing 2 volumes with 2 connected components
+Info    : Tetrahedrizing 12469 nodes...
+Info    : Done tetrahedrizing 12477 nodes (Wall 0.142898s, CPU 0.133935s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.383001s, CPU 0.35697s)
+Info    : Found volume 1
+Info    : It. 0 - 0 nodes created - worst tet radius 1.07295 (nodes removed 0 0)
+Info    : 3D refinement terminated (13138 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 42127 tetrahedra created in 0.0236054 sec. (1784632 tets/s)
+Info    : 0 node relocations
+Info    : Tetrahedrizing 130 nodes...
+Info    : Done tetrahedrizing 138 nodes (Wall 0.000709946s, CPU 0.00071s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.00159474s, CPU 0.001577s)
+Info    : Found volume 2
+Info    : It. 0 - 0 nodes created - worst tet radius 3.06344 (nodes removed 0 0)
+Info    : 3D refinement terminated (12678 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 484 tetrahedra created in 0.00256334 sec. (188816 tets/s)
+Info    : 0 node relocations
+Info    : Done meshing 3D (Wall 0.676429s, CPU 0.648346s)
+Info    : Optimizing mesh...
+Info    : Optimizing volume 1
+Info    : Optimization starts (volume = 235.634) with worst = 0.00156847 / average = 0.680513:
+Info    : 0.00 < quality < 0.10 :       206 elements
+Info    : 0.10 < quality < 0.20 :       483 elements
+Info    : 0.20 < quality < 0.30 :       731 elements
+Info    : 0.30 < quality < 0.40 :       922 elements
+Info    : 0.40 < quality < 0.50 :      1545 elements
+Info    : 0.50 < quality < 0.60 :      3709 elements
+Info    : 0.60 < quality < 0.70 :     10316 elements
+Info    : 0.70 < quality < 0.80 :     20645 elements
+Info    : 0.80 < quality < 0.90 :      2000 elements
+Info    : 0.90 < quality < 1.00 :      1570 elements
+Info    : 1342 edge swaps, 18 node relocations (volume = 235.634): worst = 0.0361831 / average = 0.698932 (Wall 0.0161041s, CPU 0.016105s)
+Info    : 1407 edge swaps, 20 node relocations (volume = 235.634): worst = 0.175688 / average = 0.699623 (Wall 0.019253s, CPU 0.019254s)
+Info    : 1411 edge swaps, 21 node relocations (volume = 235.634): worst = 0.18248 / average = 0.699663 (Wall 0.0216148s, CPU 0.021616s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         3 elements
+Info    : 0.20 < quality < 0.30 :        32 elements
+Info    : 0.30 < quality < 0.40 :       798 elements
+Info    : 0.40 < quality < 0.50 :      1275 elements
+Info    : 0.50 < quality < 0.60 :      3703 elements
+Info    : 0.60 < quality < 0.70 :     10864 elements
+Info    : 0.70 < quality < 0.80 :     20444 elements
+Info    : 0.80 < quality < 0.90 :      2157 elements
+Info    : 0.90 < quality < 1.00 :      1577 elements
+Info    : Optimizing volume 2
+Info    : Optimization starts (volume = 0.256435) with worst = 0.112733 / average = 0.736807:
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         1 elements
+Info    : 0.20 < quality < 0.30 :         5 elements
+Info    : 0.30 < quality < 0.40 :        10 elements
+Info    : 0.40 < quality < 0.50 :        24 elements
+Info    : 0.50 < quality < 0.60 :        31 elements
+Info    : 0.60 < quality < 0.70 :        64 elements
+Info    : 0.70 < quality < 0.80 :       183 elements
+Info    : 0.80 < quality < 0.90 :       126 elements
+Info    : 0.90 < quality < 1.00 :        40 elements
+Info    : 6 edge swaps, 0 node relocations (volume = 0.256435): worst = 0.307232 / average = 0.743419 (Wall 0.000100453s, CPU 0.000102s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         0 elements
+Info    : 0.20 < quality < 0.30 :         0 elements
+Info    : 0.30 < quality < 0.40 :        11 elements
+Info    : 0.40 < quality < 0.50 :        22 elements
+Info    : 0.50 < quality < 0.60 :        32 elements
+Info    : 0.60 < quality < 0.70 :        62 elements
+Info    : 0.70 < quality < 0.80 :       185 elements
+Info    : 0.80 < quality < 0.90 :       127 elements
+Info    : 0.90 < quality < 1.00 :        40 elements
+Info    : Done optimizing mesh (Wall 0.0460748s, CPU 0.046073s)
+Info    : 13536 nodes 67760 elements
+Info    : Meshing order 2 (curvilinear on)...
+Info    : [  0%] Meshing curve 1 order 2
+Info    : [ 10%] Meshing curve 2 order 2
+Info    : [ 20%] Meshing curve 3 order 2
+Info    : [ 20%] Meshing curve 4 order 2
+Info    : [ 30%] Meshing curve 5 order 2
+Info    : [ 30%] Meshing curve 6 order 2
+Info    : [ 40%] Meshing curve 7 order 2
+Info    : [ 40%] Meshing curve 8 order 2
+Info    : [ 50%] Meshing curve 9 order 2
+Info    : [ 50%] Meshing curve 10 order 2
+Info    : [ 60%] Meshing curve 11 order 2
+Info    : [ 60%] Meshing curve 12 order 2
+Info    : [ 70%] Meshing surface 1 order 2
+Info    : [ 70%] Meshing surface 2 order 2
+Info    : [ 80%] Meshing surface 3 order 2
+Info    : [ 80%] Meshing surface 4 order 2
+Info    : [ 90%] Meshing surface 5 order 2
+Info    : [ 90%] Meshing surface 6 order 2
+Info    : [100%] Meshing volume 1 order 2
+Info    : [100%] Meshing volume 2 order 2
+Info    : Surface mesh: worst distortion = 0.797589 (0 elements in ]0, 0.2]); worst gamma = 0.68104
+Warning : Volume mesh: worst distortion = -0.0482013 (avg = 0.96026, 1 elements with jac. < 0)
+Info    : Done meshing order 2 (Wall 14.575s, CPU 14.5727s)
+Info    : Writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/geom_mesh_LM50_phiN60_s25.inp'...
+Info    : Done writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/geom_mesh_LM50_phiN60_s25.inp'
+[LM50_phiN60 1/9] L_M=50.0, phi=-60.0, s=25.0mm, push_depth=0.05mm ...
+  [LM50_phiN60] [실패] (2.7s)
+[LM50_phiN60 2/9] L_M=50.0, phi=-60.0, s=25.0mm, push_depth=0.1mm ...
+  [LM50_phiN60] [실패] (2.7s)
+[LM50_phiN60 3/9] L_M=50.0, phi=-60.0, s=25.0mm, push_depth=0.15mm ...
+  [LM50_phiN60] [실패] (2.8s)
+Info    : Meshing 1D...
+Info    : [  0%] Meshing curve 1 (BSpline)
+Info    : [ 10%] Meshing curve 2 (Ellipse)
+Info    : [ 20%] Meshing curve 3 (Ellipse)
+Info    : [ 30%] Meshing curve 4 (BSpline)
+Info    : [ 40%] Meshing curve 5 (BSpline)
+Info    : [ 50%] Meshing curve 6 (BSpline)
+Info    : [ 60%] Meshing curve 7 (BSpline)
+Info    : [ 60%] Meshing curve 8 (BSpline)
+Info    : [ 70%] Meshing curve 9 (BSpline)
+Info    : [ 90%] Meshing curve 11 (Circle)
+Info    : Done meshing 1D (Wall 0.0207149s, CPU 0.01973s)
+Info    : Meshing 2D...
+Info    : [  0%] Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : [ 20%] Meshing surface 2 (Plane, Frontal-Delaunay)
+Info    : [ 40%] Meshing surface 3 (BSpline surface, Frontal-Delaunay)
+Info    : [ 60%] Meshing surface 4 (BSpline surface, Frontal-Delaunay)
+Info    : [ 70%] Meshing surface 5 (Plane, Frontal-Delaunay)
+Info    : [ 90%] Meshing surface 6 (Sphere, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.767761s, CPU 0.764625s)
+Info    : Meshing 3D...
+Info    : 3D Meshing 2 volumes with 2 connected components
+Info    : Tetrahedrizing 12469 nodes...
+Info    : Done tetrahedrizing 12477 nodes (Wall 0.137055s, CPU 0.134062s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.352297s, CPU 0.343035s)
+Info    : Found volume 1
+Info    : It. 0 - 0 nodes created - worst tet radius 1.07295 (nodes removed 0 0)
+Info    : 3D refinement terminated (13139 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 42127 tetrahedra created in 0.0327178 sec. (1287586 tets/s)
+Info    : 0 node relocations
+Info    : Tetrahedrizing 131 nodes...
+Info    : Done tetrahedrizing 139 nodes (Wall 0.000758791s, CPU 0.000759s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.00179332s, CPU 0.001796s)
+Info    : Found volume 2
+Info    : It. 0 - 0 nodes created - worst tet radius 3.1274 (nodes removed 0 0)
+Info    : 3D refinement terminated (12678 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 470 tetrahedra created in 0.00443823 sec. (105898 tets/s)
+Info    : 0 node relocations
+Info    : Done meshing 3D (Wall 0.669897s, CPU 0.660588s)
+Info    : Optimizing mesh...
+Info    : Optimizing volume 1
+Info    : Optimization starts (volume = 235.634) with worst = 0.00156847 / average = 0.680513:
+Info    : 0.00 < quality < 0.10 :       206 elements
+Info    : 0.10 < quality < 0.20 :       483 elements
+Info    : 0.20 < quality < 0.30 :       731 elements
+Info    : 0.30 < quality < 0.40 :       922 elements
+Info    : 0.40 < quality < 0.50 :      1545 elements
+Info    : 0.50 < quality < 0.60 :      3709 elements
+Info    : 0.60 < quality < 0.70 :     10316 elements
+Info    : 0.70 < quality < 0.80 :     20645 elements
+Info    : 0.80 < quality < 0.90 :      2000 elements
+Info    : 0.90 < quality < 1.00 :      1570 elements
+Info    : 1342 edge swaps, 18 node relocations (volume = 235.634): worst = 0.0361831 / average = 0.698932 (Wall 0.0200314s, CPU 0.020031s)
+Info    : 1407 edge swaps, 20 node relocations (volume = 235.634): worst = 0.175688 / average = 0.699623 (Wall 0.0252264s, CPU 0.025226s)
+Info    : 1411 edge swaps, 21 node relocations (volume = 235.634): worst = 0.18248 / average = 0.699663 (Wall 0.0291606s, CPU 0.02916s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         3 elements
+Info    : 0.20 < quality < 0.30 :        32 elements
+Info    : 0.30 < quality < 0.40 :       798 elements
+Info    : 0.40 < quality < 0.50 :      1275 elements
+Info    : 0.50 < quality < 0.60 :      3703 elements
+Info    : 0.60 < quality < 0.70 :     10864 elements
+Info    : 0.70 < quality < 0.80 :     20444 elements
+Info    : 0.80 < quality < 0.90 :      2157 elements
+Info    : 0.90 < quality < 1.00 :      1577 elements
+Info    : Optimizing volume 2
+Info    : Optimization starts (volume = 0.256422) with worst = 0.0557115 / average = 0.745385:
+Info    : 0.00 < quality < 0.10 :         1 elements
+Info    : 0.10 < quality < 0.20 :         3 elements
+Info    : 0.20 < quality < 0.30 :         5 elements
+Info    : 0.30 < quality < 0.40 :         8 elements
+Info    : 0.40 < quality < 0.50 :         7 elements
+Info    : 0.50 < quality < 0.60 :        19 elements
+Info    : 0.60 < quality < 0.70 :        86 elements
+Info    : 0.70 < quality < 0.80 :       184 elements
+Info    : 0.80 < quality < 0.90 :       117 elements
+Info    : 0.90 < quality < 1.00 :        40 elements
+Info    : 9 edge swaps, 0 node relocations (volume = 0.256422): worst = 0.307806 / average = 0.758686 (Wall 0.000118952s, CPU 0.000122s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         0 elements
+Info    : 0.20 < quality < 0.30 :         0 elements
+Info    : 0.30 < quality < 0.40 :         8 elements
+Info    : 0.40 < quality < 0.50 :         6 elements
+Info    : 0.50 < quality < 0.60 :        16 elements
+Info    : 0.60 < quality < 0.70 :        84 elements
+Info    : 0.70 < quality < 0.80 :       186 elements
+Info    : 0.80 < quality < 0.90 :       121 elements
+Info    : 0.90 < quality < 1.00 :        40 elements
+Info    : Done optimizing mesh (Wall 0.0619645s, CPU 0.061963s)
+Info    : 13536 nodes 67744 elements
+Info    : Meshing order 2 (curvilinear on)...
+Info    : [  0%] Meshing curve 1 order 2
+Info    : [ 10%] Meshing curve 2 order 2
+Info    : [ 20%] Meshing curve 3 order 2
+Info    : [ 20%] Meshing curve 4 order 2
+Info    : [ 30%] Meshing curve 5 order 2
+Info    : [ 30%] Meshing curve 6 order 2
+Info    : [ 40%] Meshing curve 7 order 2
+Info    : [ 40%] Meshing curve 8 order 2
+Info    : [ 50%] Meshing curve 9 order 2
+Info    : [ 50%] Meshing curve 10 order 2
+Info    : [ 60%] Meshing curve 11 order 2
+Info    : [ 60%] Meshing curve 12 order 2
+Info    : [ 70%] Meshing surface 1 order 2
+Info    : [ 70%] Meshing surface 2 order 2
+Info    : [ 80%] Meshing surface 3 order 2
+Info    : [ 80%] Meshing surface 4 order 2
+Info    : [ 90%] Meshing surface 5 order 2
+Info    : [ 90%] Meshing surface 6 order 2
+Info    : [100%] Meshing volume 1 order 2
+Info    : [100%] Meshing volume 2 order 2
+Info    : Surface mesh: worst distortion = 0.797589 (0 elements in ]0, 0.2]); worst gamma = 0.68104
+Warning : Volume mesh: worst distortion = -0.0482013 (avg = 0.960258, 1 elements with jac. < 0)
+Info    : Done meshing order 2 (Wall 14.4573s, CPU 14.447s)
+Info    : Writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/geom_mesh_LM50_phiN60_s50.inp'...
+Info    : Done writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/geom_mesh_LM50_phiN60_s50.inp'
+[LM50_phiN60 4/9] L_M=50.0, phi=-60.0, s=50.0mm, push_depth=0.05mm ...
+  [LM50_phiN60] [실패] (2.7s)
+[LM50_phiN60 5/9] L_M=50.0, phi=-60.0, s=50.0mm, push_depth=0.1mm ...
+  [LM50_phiN60] [실패] (2.8s)
+[LM50_phiN60 6/9] L_M=50.0, phi=-60.0, s=50.0mm, push_depth=0.15mm ...
+  [LM50_phiN60] [실패] (2.7s)
+Info    : Meshing 1D...
+Info    : [  0%] Meshing curve 1 (BSpline)
+Info    : [ 10%] Meshing curve 2 (Ellipse)
+Info    : [ 20%] Meshing curve 3 (Ellipse)
+Info    : [ 30%] Meshing curve 4 (BSpline)
+Info    : [ 40%] Meshing curve 5 (BSpline)
+Info    : [ 50%] Meshing curve 6 (BSpline)
+Info    : [ 60%] Meshing curve 7 (BSpline)
+Info    : [ 60%] Meshing curve 8 (BSpline)
+Info    : [ 70%] Meshing curve 9 (BSpline)
+Info    : [ 90%] Meshing curve 11 (Circle)
+Info    : Done meshing 1D (Wall 0.0210401s, CPU 0.021028s)
+Info    : Meshing 2D...
+Info    : [  0%] Meshing surface 1 (Plane, Frontal-Delaunay)
+Info    : [ 20%] Meshing surface 2 (Plane, Frontal-Delaunay)
+Info    : [ 40%] Meshing surface 3 (BSpline surface, Frontal-Delaunay)
+Info    : [ 60%] Meshing surface 4 (BSpline surface, Frontal-Delaunay)
+Info    : [ 70%] Meshing surface 5 (Plane, Frontal-Delaunay)
+Info    : [ 90%] Meshing surface 6 (Sphere, Frontal-Delaunay)
+Info    : Done meshing 2D (Wall 0.735431s, CPU 0.73324s)
+Info    : Meshing 3D...
+Info    : 3D Meshing 2 volumes with 2 connected components
+Info    : Tetrahedrizing 12469 nodes...
+Info    : Done tetrahedrizing 12477 nodes (Wall 0.137005s, CPU 0.130994s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.362694s, CPU 0.343683s)
+Info    : Found volume 1
+Info    : It. 0 - 0 nodes created - worst tet radius 1.07295 (nodes removed 0 0)
+Info    : 3D refinement terminated (13139 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 42127 tetrahedra created in 0.0259469 sec. (1623586 tets/s)
+Info    : 0 node relocations
+Info    : Tetrahedrizing 131 nodes...
+Info    : Done tetrahedrizing 139 nodes (Wall 0.000757508s, CPU 0.00076s)
+Info    : Reconstructing mesh...
+Info    :  - Creating surface mesh
+Info    :  - Identifying boundary edges
+Info    :  - Recovering boundary
+Info    : Done reconstructing mesh (Wall 0.0017835s, CPU 0.001784s)
+Info    : Found volume 2
+Info    : It. 0 - 0 nodes created - worst tet radius 3.1274 (nodes removed 0 0)
+Info    : 3D refinement terminated (12678 nodes total):
+Info    :  - 0 Delaunay cavities modified for star shapeness
+Info    :  - 0 nodes could not be inserted
+Info    :  - 470 tetrahedra created in 0.00314443 sec. (149470 tets/s)
+Info    : 0 node relocations
+Info    : Done meshing 3D (Wall 0.641482s, CPU 0.620439s)
+Info    : Optimizing mesh...
+Info    : Optimizing volume 1
+Info    : Optimization starts (volume = 235.634) with worst = 0.00156847 / average = 0.680513:
+Info    : 0.00 < quality < 0.10 :       206 elements
+Info    : 0.10 < quality < 0.20 :       483 elements
+Info    : 0.20 < quality < 0.30 :       731 elements
+Info    : 0.30 < quality < 0.40 :       922 elements
+Info    : 0.40 < quality < 0.50 :      1545 elements
+Info    : 0.50 < quality < 0.60 :      3709 elements
+Info    : 0.60 < quality < 0.70 :     10316 elements
+Info    : 0.70 < quality < 0.80 :     20645 elements
+Info    : 0.80 < quality < 0.90 :      2000 elements
+Info    : 0.90 < quality < 1.00 :      1570 elements
+Info    : 1342 edge swaps, 18 node relocations (volume = 235.634): worst = 0.0361831 / average = 0.698932 (Wall 0.0152458s, CPU 0.015245s)
+Info    : 1407 edge swaps, 20 node relocations (volume = 235.634): worst = 0.175688 / average = 0.699623 (Wall 0.0183827s, CPU 0.018383s)
+Info    : 1411 edge swaps, 21 node relocations (volume = 235.634): worst = 0.18248 / average = 0.699663 (Wall 0.0206402s, CPU 0.020641s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         3 elements
+Info    : 0.20 < quality < 0.30 :        32 elements
+Info    : 0.30 < quality < 0.40 :       798 elements
+Info    : 0.40 < quality < 0.50 :      1275 elements
+Info    : 0.50 < quality < 0.60 :      3703 elements
+Info    : 0.60 < quality < 0.70 :     10864 elements
+Info    : 0.70 < quality < 0.80 :     20444 elements
+Info    : 0.80 < quality < 0.90 :      2157 elements
+Info    : 0.90 < quality < 1.00 :      1577 elements
+Info    : Optimizing volume 2
+Info    : Optimization starts (volume = 0.256422) with worst = 0.0557115 / average = 0.745385:
+Info    : 0.00 < quality < 0.10 :         1 elements
+Info    : 0.10 < quality < 0.20 :         3 elements
+Info    : 0.20 < quality < 0.30 :         5 elements
+Info    : 0.30 < quality < 0.40 :         8 elements
+Info    : 0.40 < quality < 0.50 :         7 elements
+Info    : 0.50 < quality < 0.60 :        19 elements
+Info    : 0.60 < quality < 0.70 :        86 elements
+Info    : 0.70 < quality < 0.80 :       184 elements
+Info    : 0.80 < quality < 0.90 :       117 elements
+Info    : 0.90 < quality < 1.00 :        40 elements
+Info    : 9 edge swaps, 0 node relocations (volume = 0.256422): worst = 0.307806 / average = 0.758686 (Wall 0.000116208s, CPU 0.000117s)
+Info    : No ill-shaped tets in the mesh :-)
+Info    : 0.00 < quality < 0.10 :         0 elements
+Info    : 0.10 < quality < 0.20 :         0 elements
+Info    : 0.20 < quality < 0.30 :         0 elements
+Info    : 0.30 < quality < 0.40 :         8 elements
+Info    : 0.40 < quality < 0.50 :         6 elements
+Info    : 0.50 < quality < 0.60 :        16 elements
+Info    : 0.60 < quality < 0.70 :        84 elements
+Info    : 0.70 < quality < 0.80 :       186 elements
+Info    : 0.80 < quality < 0.90 :       121 elements
+Info    : 0.90 < quality < 1.00 :        40 elements
+Info    : Done optimizing mesh (Wall 0.0450939s, CPU 0.045094s)
+Info    : 13536 nodes 67744 elements
+Info    : Meshing order 2 (curvilinear on)...
+Info    : [  0%] Meshing curve 1 order 2
+Info    : [ 10%] Meshing curve 2 order 2
+Info    : [ 20%] Meshing curve 3 order 2
+Info    : [ 20%] Meshing curve 4 order 2
+Info    : [ 30%] Meshing curve 5 order 2
+Info    : [ 30%] Meshing curve 6 order 2
+Info    : [ 40%] Meshing curve 7 order 2
+Info    : [ 40%] Meshing curve 8 order 2
+Info    : [ 50%] Meshing curve 9 order 2
+Info    : [ 50%] Meshing curve 10 order 2
+Info    : [ 60%] Meshing curve 11 order 2
+Info    : [ 60%] Meshing curve 12 order 2
+Info    : [ 70%] Meshing surface 1 order 2
+Info    : [ 70%] Meshing surface 2 order 2
+Info    : [ 80%] Meshing surface 3 order 2
+Info    : [ 80%] Meshing surface 4 order 2
+Info    : [ 90%] Meshing surface 5 order 2
+Info    : [ 90%] Meshing surface 6 order 2
+Info    : [100%] Meshing volume 1 order 2
+Info    : [100%] Meshing volume 2 order 2
+Info    : Surface mesh: worst distortion = 0.797589 (0 elements in ]0, 0.2]); worst gamma = 0.68104
+Warning : Volume mesh: worst distortion = -0.0482013 (avg = 0.960258, 1 elements with jac. < 0)
+Info    : Done meshing order 2 (Wall 14.5359s, CPU 14.5272s)
+Info    : Writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/geom_mesh_LM50_phiN60_s75.inp'...
+Info    : Done writing '/home/user/mscr-mom/현서/scripts/contact_scenarios/fea/geom_mesh_LM50_phiN60_s75.inp'
+[LM50_phiN60 7/9] L_M=50.0, phi=-60.0, s=75.0mm, push_depth=0.05mm ...
+  [LM50_phiN60] [실패] (2.7s)
+[LM50_phiN60 8/9] L_M=50.0, phi=-60.0, s=75.0mm, push_depth=0.1mm ...
+  [LM50_phiN60] [실패] (2.7s)
+[LM50_phiN60 9/9] L_M=50.0, phi=-60.0, s=75.0mm, push_depth=0.15mm ...
+  [LM50_phiN60] [실패] (2.7s)
+[LM50_phiN60] 완료: 0/9 성공
