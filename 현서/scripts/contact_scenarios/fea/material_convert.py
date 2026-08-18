@@ -1,9 +1,14 @@
 """
-force_model.py에서 논문 데이터로 피팅한 K2(실리콘 단독 구간 굽힘강성)를 실제 재료 물성치로 역산.
+force_model.py가 쓰는 영률(E, 교수님 제공 MATLAB 코드(code(2).txt) 값)에서 FEA용
+초탄성(Neo-Hookean) 재료물성을 역산.
 
-선형 보 이론: K = E * I  ->  E = K / I
-I(중공원통 단면 2차모멘트) = pi/64 * (D_out^4 - D_in^4)
+2026-08-18 수정: 예전엔 force_model.py의 "논문 그림 디지타이징 피팅" K2를 여기서 K2=E*I로
+역산해서 E를 구했음(K2=9.8872e-07 고정값). 이제 force_model.py가 반대 방향(E=850kPa를
+MATLAB 코드에서 직접 가져와 K2=E*I로 계산)으로 바뀌었으므로, 여기서도 E를 K2에서 역산하지
+않고 force_model.py와 동일한 E를 직접 씀 - 두 파일이 서로 다른 K2를 참조해서 FEA 자유단
+형상과 접촉힘 재료가 어긋나는 일을 원천적으로 막기 위함(같은 상수 하나를 양쪽이 공유).
 
+선형 보 이론: K = E * I. I(중공원통 단면 2차모멘트) = pi/64 * (D_out^4 - D_in^4).
 이렇게 얻은 E는 "선형 보 이론 기준" 등가 영률이라, FEA에서 쓸 초탄성(Neo-Hookean) 모델로
 바꿔줘야 함. 실리콘처럼 거의 비압축(포아송비 ~0.49~0.499)인 재료는 소변형 극한에서
 전단탄성계수 mu = E / (2*(1+nu)) 이고, Neo-Hookean의 C10 = mu/2 관계를 씀.
@@ -12,15 +17,15 @@ I(중공원통 단면 2차모멘트) = pi/64 * (D_out^4 - D_in^4)
 """
 import numpy as np
 
-# ── 논문 데이터 피팅으로 얻은 값 (scripts/force_model/fit_k1k2_from_paper.py 결과) ──
-K2 = 9.8872e-07  # N*m^2, 실리콘 단독 구간 굽힘강성
+# ── force_model.py와 동일한 값 (scripts/force_model/force_model.py의 E_YOUNG 참고) ──
+E = 850 * 1000  # Pa, 교수님 제공 MATLAB 코드(code(2).txt) 값
 
-# ── 실리콘 튜브 단면 (논문 Section II-B 기준) ──
+# ── 실리콘 튜브 단면 (논문 Section II-B 기준, force_model.py의 D_OUTER/D_INNER와 동일) ──
 D_OUT = 2.0e-3   # m
 D_IN = 1.0e-3    # m
 I_SILICONE = np.pi / 64 * (D_OUT**4 - D_IN**4)  # m^4
 
-E = K2 / I_SILICONE  # Pa
+K2 = E * I_SILICONE  # N*m^2, 참고용 - force_model.py의 K2와 반드시 같아야 함
 NU = 0.49  # 실리콘 고무의 전형적인 포아송비 (거의 비압축)
 
 MU = E / (2 * (1 + NU))   # 전단탄성계수 (Pa, SI)

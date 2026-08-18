@@ -39,11 +39,19 @@ MU0 = 4 * np.pi * 1e-7
 # "+tau") 모든 LM/L·phi 조합에서 K1,K2가 안정적으로 일관된 값에 수렴했다. 그래서 아래
 # shoot() 안의 부호는 논문 원문 표기가 아니라 이 실측(디지털화) 기준으로 확정했다
 # (근거: scripts/_check_cmscr.py, scripts/_check_mom.py).
-K1 = 3.8248e-06   # N*m^2
-K2 = 9.8872e-07   # N*m^2
+# 교수님 제공 MATLAB 코드(code(2).txt) 방식: 논문 그림 디지타이징+피팅 대신, 재료값(영률
+# E=850kPa, 단면 D=2mm/D2=1mm 중공관)에서 K=E*I를 직접 계산. K1(MOM 구간)은 코드의 EN=2
+# 배율을 그대로 반영(K1=2*K2). 논문 피팅값(K1=3.82e-6~2.25e-6, K2=9.89e-7~8.53e-7)보다
+# 전반적으로 작음 - 어느 쪽이 실제에 더 가까운지는 아직 실측으로 검증 안 됨.
+E_YOUNG = 850 * 1000  # Pa
+D_OUTER, D_INNER = 0.002, 0.001  # m, 중공관 바깥/안지름
+I_SECTION = D_OUTER**4 * np.pi / 64 - D_INNER**4 * np.pi / 64  # 단면 2차모멘트, m^4
+EN_FACTOR = 2.0  # MATLAB 코드의 EN - 구간1(MOM측)이 구간2보다 이만큼 뻣뻣하다고 가정
+K2 = E_YOUNG * I_SECTION   # N*m^2
+K1 = EN_FACTOR * K2        # N*m^2
 K_RIGID = 1e6 * max(K1, K2)
 
-BR = 0.36  # T (자석 표면자속밀도 실측값 3600G 기준)
+BR = 0.4  # T (교수님 제공 MATLAB 코드(code(2).txt) 값과 일치시킴 - 기존 0.36T(3600G 실측값)에서 변경)
 M_MAG = BR / MU0
 
 def magnet_moment(diam_mm, len_mm):
@@ -51,9 +59,9 @@ def magnet_moment(diam_mm, len_mm):
     V = np.pi * r**2 * h
     return M_MAG * V
 
-# M1(MOM)/M2(main) 부피비로는 1:1이지만, 위 피팅에서 M1/M2=1.290이 최적으로 나와 반영함
-# (제작 공차·자화 불균일 등으로 실제 세기가 부피비와 정확히 같지 않을 수 있음).
-M1 = magnet_moment(1.0, 8.0) * 1.290
+# M1/M2 비율은 MATLAB 코드에 해당 값이 없어(v11,v2는 부피만 다르고 배율 없음) 1:1(부피비)로
+# 되돌림 - 논문 피팅에서 나온 0.879/1.290 배율은 K1,K2를 MATLAB 방식으로 바꾸면서 같이 뺌.
+M1 = magnet_moment(1.0, 8.0)
 M2 = magnet_moment(2.0, 2.0)
 # 논문 Section II-D "Basic Actuation Tests"(Fig.3, Fig.4 형상 비교용 실험) 조건: 4,000 A/m = 0.05T.
 # 0.035T(35mT)는 Section III-D 눈알 팬텀 테스트에서 쓴 별개의 값이라 Fig.3 재현에는 맞지 않음.
