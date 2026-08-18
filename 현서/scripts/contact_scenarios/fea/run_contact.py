@@ -19,6 +19,15 @@ import material_convert as mat
 
 E_RIGID_MM = 210000.0  # N/mm^2, 강체 근사(스틸 정도) - 변위를 직접 강제하므로 형식적인 값
 
+# 2026-08-18 추가: 니티놀 와이어(사용자 실측값 - E=28GPa, 포아송비는 니티놀 전형값 0.33 사용).
+# 소변형 선형탄성으로 근사(초탄성/초탄성 상변태 거동은 모델링 안 함 - 접촉으로 인한 국소변형은
+# 작다는 전제). make_bent_contact_scene.py가 WIRE 물리그룹을 만들 때만(K1 구간 있을 때만)
+# 존재하므로, ELSET=WIRE가 없는 메쉬(예: L_M=0)에서는 이 SOLID SECTION 줄이 CalculiX에서
+# 무시되도록 존재 여부를 확인 후 조건부로 추가함.
+E_NITINOL_MM = 28000.0  # N/mm^2 (28GPa = 28000 N/mm^2, 1GPa=1000 N/mm^2)
+NU_NITINOL = 0.33
+WIRE_R_MM = 0.05  # mm, make_bent_contact_scene.py의 WIRE_R와 반드시 같아야 함 (지름 100um)
+
 
 def build_inp(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_sets.inp",
               job_name="contact_test", push_dir=(1.0, 0.0, 0.0), contact_stiffness=None,
@@ -40,6 +49,27 @@ def build_inp(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_s
         # 물리적으로 더 말이 되는 값(E / 특성길이)으로 자동 추정: E_MM / 볼 메쉬크기
         contact_stiffness = mat.E * 1e-6 / 0.15  # N/mm^2 / mm = N/mm^3
 
+    # make_bent_contact_scene.py가 K1 구간(베이스~MOM)이 있을 때만 WIRE_BEAM 물리그룹(=ELSET,
+    # B32 1D 빔요소)을 만드므로(L_M=0이면 K1 구간이 없어 와이어도 없음), mesh include 파일에
+    # ELSET=WIRE_BEAM이 실제로 있을 때만 니티놀 재질/빔단면/임베드 제약을 추가.
+    # *EMBEDDED ELEMENT는 WIRE_BEAM 절점을 HOST ELSET(TUBE, 실리콘 솔리드)의 형상함수장에
+    # 위치기반으로 묶어서(별도 접촉/TIE 없이) 두 재질이 같이 변형하게 만듦 - 콘크리트 속 철근
+    # 모델링과 동일한 표준기법. 빔 단면은 원형(SECTION=CIRC), 법선(0,0,1)은 굽힘평면(board
+    # z축 고정, make_bent_contact_scene.py 참고)과 항상 수직이라 빔축과 절대 평행하지 않음.
+    with open(os.path.join(HERE, inp_name), encoding="latin-1") as f:
+        has_wire = "ELSET=WIRE_BEAM" in f.read().upper()
+    wire_block = f"""*MATERIAL, NAME=NITINOL
+*ELASTIC
+{E_NITINOL_MM}, {NU_NITINOL}
+**
+*BEAM SECTION, ELSET=WIRE_BEAM, MATERIAL=NITINOL, SECTION=CIRC
+{WIRE_R_MM}
+0.,0.,1.
+**
+*EMBEDDED ELEMENT, HOST ELSET=TUBE
+WIRE_BEAM
+**""" if has_wire else "**"
+
     inp_content = f"""*INCLUDE, INPUT={inp_name}
 *INCLUDE, INPUT={sets_name}
 **
@@ -51,6 +81,7 @@ def build_inp(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_s
 *ELASTIC
 {E_RIGID_MM}, 0.3
 **
+{wire_block}
 *SOLID SECTION, ELSET=TUBE, MATERIAL=SILICONE
 *SOLID SECTION, ELSET=BALL, MATERIAL=RIGID_MAT
 *SHELL SECTION, ELSET=BALL_SURF, MATERIAL=RIGID_MAT

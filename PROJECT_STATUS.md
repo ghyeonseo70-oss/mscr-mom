@@ -3,17 +3,33 @@
 이 문서는 다른 컴퓨터/세션에서 새로 시작하는 Claude에게 상황을 알려주기 위한 것입니다.
 **새 세션에서 클로드에게 할 말**: "PROJECT_STATUS.md 읽고 여기서부터 이어서 진행해줘"
 
-## ⚠️ 2026-08-18 세션 업데이트 — 지금 당장 할 일 (이 컴퓨터, CalculiX 있음)
+## ⚠️ 2026-08-18 세션 업데이트 (이 컴퓨터, CalculiX 있음) — 스윕 완료, 재학습은 사양 확인 대기 중
 
 이전 세션(다른 컴퓨터)에서 교수님이 주신 MATLAB 코드(`현서/scripts/contact_scenarios/code (2).txt`)를
 분석하다가 물리 상수를 바꿨고, 그 결과 **기존 FEA 664개가 새 상수와 안 맞게 됨**. 이걸 최소
-규모로 바로잡는 게 이번 세션의 할 일.
+규모로 바로잡는 게 이번 세션의 할 일이었음(완료, 아래 3번).
+
+**⚠️ 새 세션 시작 시 먼저 확인**: 이 세션 종료 시점에 `run_lm_phi_position_matv2_wire_sweep.sh`
+(K1 구간 니티놀 와이어 포함 스윕, 360케이스, 아래 5번)가 아직 백그라운드에서 돌고 있었을 수
+있음. `ps -ef | grep matv2wiresweep` 또는 `현서/scripts/contact_scenarios/fea/fea_matv2wire_all.json`
+존재 여부로 완료 확인할 것.
 
 ### 1) 무엇이 바뀌었나
 - `scripts/force_model/force_model.py`: `BR`(자석 잔류자속밀도) `0.36T → 0.4T`, K1/K2(굽힘강성)를
   논문 그림 디지타이징 피팅 대신 **교수님 MATLAB 코드 방식**(영률 E=850kPa 직접 대입,
   K2=E·I, K1=2·K2)으로 교체. 새 값: K1=1.2517e-06, K2=6.2586e-07 N·m² (옛 값 K1≈2.25~3.82e-6,
   K2≈8.53~9.89e-7 대비 더 유연함).
+  **⚠️ 2026-08-18 추가 발견/수정**: 이 파일이 실제로는 두 벌 있었음 —
+  git이 추적하는 `scripts/force_model/force_model.py`(루트, 이번 세션에 새 값으로 고침)와
+  git이 추적 안 하는 낡은 사본 `현서/scripts/force_model/force_model.py`(폴더 이동 반영 안
+  된 물리 파일, 옛 값 그대로). `get_bent_centerline.py` 등 `현서/` 밑 스크립트는 전부
+  상대경로로 **후자(안 고쳐진 낡은 사본)**를 import하고 있어서, 스윕을 처음 돌렸을 때
+  "형상=옛 뻣뻣한 K, 접촉재료=새 유연한 E"라는 또 다른 방향의 불일치로 45분간(30/450케이스)
+  돌아갔었음 — 발견 즉시 중단하고 두 사본을 동기화(낡은 사본에 동일 수정 적용, diff 0으로
+  확인)한 뒤 처음부터 재시작함. **앞으로 `force_model.py`를 고칠 땐 두 경로 모두 확인할 것**
+  (`diff scripts/force_model/force_model.py 현서/scripts/force_model/force_model.py`로 동기화
+  여부 항상 체크 권장 — 근본적으로는 이 두 사본을 하나로 정리하는 게 맞지만 이번 세션
+  범위 밖이라 보류).
 - `현서/scripts/contact_scenarios/fea/material_convert.py`: 이 파일이 FEA의 Neo-Hookean
   재료값(C10, D1)을 만드는 곳인데, **옛 K2(9.8872e-07)를 하드코딩**하고 있어서 force_model.py의
   새 K2와 어긋나 있었음(자유단 형상은 새 K2=더 유연, 접촉힘 계산은 옛 K2=더 뻣뻣한 재료 —
@@ -49,16 +65,80 @@
   python check_beta180_symmetry.py
   ```
 
-### 3) 스윕 끝난 뒤 할 일
-1. `check_beta180_symmetry.py` 판정 확인 (대칭성 유지되면 그대로, 아니면 beta=180 확장 필요).
-2. `현서/scripts/contact_scenarios/fea/train_segment_classifier_singleprobe_beta0180_4seg.py`의
-   `SOURCES` 리스트를 새 파일(`fea_lm_phi_pos_matv2_all.json`, 필요시 대칭성 보강분 포함)로
-   바꾸고, 대체모델(surrogate) 재학습 → 15만개 합성데이터 재생성 → CNN 재학습(150k, GPU
-   ~110분). 이전엔 새 K1/K2/Br 상수만 반영한 스모크테스트(500샘플/3에폭)까지만 하고, 이
-   material_convert.py 불일치 문제 때문에 전체 재학습은 보류했었음 — 이제 이 스윕+수정이
-   끝나면 바로 전체 재학습 진행하면 됨.
-3. 재학습 후 성능이 기존(91.0% seg / R²=0.938 s, 옛 상수 기준)과 크게 다르면 — 상수가
-   바뀌었으니 절대 수치는 달라질 수 있음, 큰 폭 저하가 아니면 정상.
+### 3) 스윕 결과 (2026-08-18 완료)
+- `run_lm_phi_position_matv2_sweep.sh` 완료: **181/450 성공(40.2%)** →
+  `fea_lm_phi_pos_matv2_all.json`. 실패율(약 60%)은 예전 664개 스윕 때도 phi 극단값 근처에서
+  비슷하게 높았던 것과 같은 종류(급한 굽힘에서 CalculiX 자코비안 실패) - 새 재료값 때문에
+  악화된 게 아님(직접 대조 확인함, 아래 와이어 섹션 참고).
+- `check_beta180_symmetry.py` 판정: **대칭성 유지** (F_mag 상대오차 중앙값 1.66%, 33표본,
+  5% 기준 이내) → beta=180 추가 스윕 불필요, beta=0 데이터를 부호반전해서 재사용 권장.
+
+### 4) ⚠️ 다음 단계(재학습) 막힘 — 사용자 확인 필요
+원래 계획(`2) 새로 만든 스윕` 문단, 이전 세션 작성)은 스윕 끝나면
+`train_segment_classifier_singleprobe_beta0180_4seg.py`의 `SOURCES`를 새 파일로 바꿔서
+재학습하라고 되어 있는데, **이 파일이 저장소에 없음**(`find`로 확인, 존재하지 않음). 실제로
+존재하는 "최종/최고 성능" 스크립트는 `train_segment_classifier_multiprobe_auxreg.py`인데,
+이건 **multi-probe + 5구간분류**라 계획에 적힌 **single-probe + 4구간(4seg)**과 사양이 다름
+(같은 파이프라인의 오타/축약 표기인지, 별도로 계획했다가 실제로 못 만든 새 스크립트인지
+불명확). 잘못 짐작해서 큰 GPU 작업(재학습 ~110분)을 밀어붙이면 시간 낭비 위험이 커서,
+**이 부분은 진행 안 하고 사용자 확인 대기 중**. 다음 세션에서 확인할 것:
+- "4구간(4seg)"이 의도적 변경인지(기존 5구간에서 줄임), 오기인지
+- "single-probe"가 의도적인지(기존 11-probe 능동탐색에서 단일 관측으로 되돌린 것 - 단일
+  관측은 이 프로젝트 초기에 20.5%로 실패했던 접근이라 원래대로면 이상함), 아니면 그냥
+  `train_segment_classifier_multiprobe_auxreg.py`의 `SOURCES`를 바꾸는 게 맞는지
+- 확인되면: 해당 스크립트의 `SOURCES`를 `fea_lm_phi_pos_matv2_all.json`(+ 필요시 beta=180
+  부호반전 보강분)으로 바꾸고 대체모델 재학습 → 15만개 합성데이터 재생성 → CNN 재학습(150k,
+  GPU ~110분) 진행. 재학습 후 성능이 기존(91.0% seg / R²=0.938 s, 옛 상수 기준)과 다르면 —
+  상수가 바뀌었으니 절대 수치는 달라질 수 있음, 큰 폭 저하가 아니면 정상.
+
+### 5) [신규] K1 구간 니티놀 와이어 FEA 실험 (2026-08-18, 사용자 요청)
+와이어를 실제로 FEA에 넣어서 K1 구간(베이스~MOM) 접촉힘/굽힘강성 기여를 확인해봄. 사용자 제공
+실측값: 지름 100um(반지름 0.05mm), E=28GPa, 포아송비 0.33(니티놀 전형값)으로 가정, 선형탄성
+근사(초탄성/상변태 거동은 모델링 안 함).
+
+**시행착오 (참고용, 재시도 불필요)**:
+1. 와이어를 실제 지름(0.1mm)의 3D 고체(구멍 뚫은 파이프)로 직접 메싱 → 극단적 크기비율(와이어
+   0.1mm vs 튜브 100mm) 때문에 2차 곡면요소가 자코비안 음수. 메쉬를 세밀화해도 요소수만
+   폭증하고 CalculiX가 세그폴트로 죽음 → 기각.
+2. 1D 빔요소(B32)+CalculiX `*EMBEDDED ELEMENT`로 전환(콘크리트 속 철근과 동일 기법, 이 정도
+   길이/지름비(200:1+)에서 빔이론은 사실상 정확 - 국소 응력 디테일만 포기, 접촉힘/강성 같은
+   집합값은 정확도 유지). 처음엔 빔이 embed할 고체가 필요해서 원래 비어있는 내강(중심축)을
+   K1 구간만 실리콘 충전재로 채우는 방식(gmsh fragment) 시도 → 직선(phi=0)은 성공했지만,
+   **굽은 형상(phi≠0)에서 충전재의 독립 스플라인이 튜브 스플라인과 미세하게 어긋나** fragment 시
+   쐐기모양 틈이 생겨 자코비안 음수(왜곡도 -14.97까지) → 기각.
+3. **최종 채택**: 충전재 없이, **와이어를 이미 고체인 실리콘 벽 두께 안쪽(반지름 0.75mm =
+   D_IN/2~D_OUT/2 중간)에 직접 임베드** — 사용자와 논의 후 결정(실제 카테터도 이런 보강재를
+   속 빈 내강 정중앙보다 벽 속에 매립하는 경우가 흔해서 물리적으로도 무리 없음). 기하가 훨씬
+   단순해져서 fragment 문제 자체가 사라짐. 직선/굽은(phi=-90) 케이스 모두 검증 완료 —
+   **와이어를 넣어도 기존(와이어 없는) 파이프라인과 완전히 동일한 성공/실패 패턴**(같은 케이스가
+   같은 이유로 똑같이 실패/성공, 새로운 문제 없음).
+
+**검증 결과** (L_M=25, phi=0, s=15mm, push_depth=0.10mm): F_mag 와이어없음 0.0410mN → 와이어
+있음 0.0441mN (**+7.7%**), 팁변위(tip_ux) 0.6939mm → 0.6989mm(살짝 감소) — 물리적으로 맞는
+방향(와이어가 있으면 더 뻣뻣해짐).
+
+**코드**:
+- `make_bent_contact_scene.py`: `build_mesh(..., include_wire=False)` 기본값 False(명시적
+  opt-in 필요 - 아래 "사고" 참고). `include_wire=True`면 K1 구간(s=0~a1, a1=L_M-H_M/2)에
+  벽 안쪽 임베드 와이어 빔 커브(WIRE_BEAM 물리그룹) 추가.
+- `run_contact.py`: `.inp`에 `ELSET=WIRE_BEAM`이 있을 때만(mesh 파일 내용으로 자동 감지)
+  NITINOL 재질 + `*BEAM SECTION`(SECTION=CIRC) + `*EMBEDDED ELEMENT, HOST ELSET=TUBE` 추가.
+- 새 스윕: `sweep_lm_phi_position_matv2_wire_worker.py` + `run_lm_phi_position_matv2_wire_sweep.sh`
+  — LM(4: 0,25,50,75) × phi(9) × s(10) = 360케이스, beta=0만, `include_wire=True`.
+  **결과 파일 접두사를 `fea_matv2wire_*`로 분리**(재료값-검증 스윕의 `fea_lm_phi_pos_matv2_*`
+  glob과 절대 안 겹치게 - 아래 사고 참고). 재료값-검증 스윕과 동시에 돌 때 자원을 나누도록
+  동시성을 낮춤(-P4, --threads 4 = 16스레드, 재료값-검증 스윕의 9×4=36스레드와 합쳐 52/64).
+  ```bash
+  cd 현서/scripts/contact_scenarios/fea
+  bash run_lm_phi_position_matv2_wire_sweep.sh   # 결과: ../../../data/contact_scenarios/fea/fea_matv2wire_all.json
+  ```
+
+**⚠️ 사고 기록(재발 방지용)**: `include_wire` 플래그 없이 `build_mesh()` 자체를 바로 고쳤을 때,
+마침 그 시점에 **이미 돌고 있던 재료값-검증 스윕**(와이어와 무관한 별개 작업)이 다음 조합을
+시작하면서 의도치 않게 새 와이어 코드를 탄 적이 있음(phi=-90 조합 10개 전부 메쉬 왜곡으로
+실패, 저장된 데이터 오염은 없었음 - 전부 실패 처리라 결과 JSON엔 안 들어감). **교훈**: 실행
+중인 스윕이 있는 상태에서 그 스윕이 매 케이스마다 새로 import하는 모듈(`make_bent_contact_scene.py`
+등)을 수정할 땐, 기본 동작이 바뀌지 않는지(또는 opt-in 플래그로 막혀 있는지) 반드시 확인할 것.
 
 ## 프로젝트 개요
 
