@@ -1,0 +1,49 @@
+대체모델 학습 데이터: 181개 (fea_lm_phi_pos_matv2_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용) ===
+  tip_ux_avg_mm: R^2=0.679
+  tip_uy_avg_mm: R^2=0.770
+  tip_uz_avg_mm: R^2=-1.163
+  tip_theta_deg_board: R^2=0.972
+  Fx_total_N: R^2=0.924
+  Fy_total_N: R^2=-0.007
+  Fz_total_N: R^2=-0.352
+  F_mag_N: R^2=0.953
+대체모델 학습 완료 (162s)
+150000개 단일관측(beta=0/180도 한정) 합성 데이터 생성 시작 (32-way 병렬)...
+합성 데이터 생성 완료: 150000개 (1197s)
+구간별 샘플 수: {0: 21309, 1: 42787, 2: 42926, 3: 42978}
+최종 분류기 학습 시작 (device=cuda)...
+Epoch [ 1/60] ValAcc  72.8%  SegLoss 0.6219  ForceLoss 0.3634  SLoss 0.1816  ConfigLoss 0.2606
+Epoch [ 5/60] ValAcc  80.2%  SegLoss 0.4592  ForceLoss 0.1497  SLoss 0.1261  ConfigLoss 0.1109
+Epoch [10/60] ValAcc  86.8%  SegLoss 0.3147  ForceLoss 0.1139  SLoss 0.0723  ConfigLoss 0.0850
+Epoch [15/60] ValAcc  86.0%  SegLoss 0.3175  ForceLoss 0.0963  SLoss 0.0635  ConfigLoss 0.0632
+Epoch [20/60] ValAcc  85.0%  SegLoss 0.3357  ForceLoss 0.0975  SLoss 0.0707  ConfigLoss 0.0641
+Epoch [25/60] ValAcc  89.3%  SegLoss 0.2524  ForceLoss 0.0799  SLoss 0.0500  ConfigLoss 0.0517
+Epoch [30/60] ValAcc  87.7%  SegLoss 0.2773  ForceLoss 0.0805  SLoss 0.0507  ConfigLoss 0.0570
+Epoch [35/60] ValAcc  90.0%  SegLoss 0.2336  ForceLoss 0.0717  SLoss 0.0420  ConfigLoss 0.0478
+Epoch [40/60] ValAcc  90.4%  SegLoss 0.2242  ForceLoss 0.0707  SLoss 0.0419  ConfigLoss 0.0477
+Epoch [45/60] ValAcc  90.3%  SegLoss 0.2267  ForceLoss 0.0690  SLoss 0.0405  ConfigLoss 0.0560
+Epoch [50/60] ValAcc  91.3%  SegLoss 0.2108  ForceLoss 0.0584  SLoss 0.0392  ConfigLoss 0.0440
+Epoch [55/60] ValAcc  90.7%  SegLoss 0.2134  ForceLoss 0.0607  SLoss 0.0372  ConfigLoss 0.0420
+Epoch [60/60] ValAcc  89.7%  SegLoss 0.2461  ForceLoss 0.0658  SLoss 0.0496  ConfigLoss 0.0518
+학습 완료 (101s), 최적 epoch=50 (val loss 기준)
+
+=== 최종 검증 정확도: 91.3% (n_val=15000), 무작위 기준선=25.0% ===
+balanced accuracy(구간별 recall 평균): 91.8%
+구간별 recall: {'0-20mm': '95.1%', '20-40mm': '91.1%', '40-60mm': '88.5%', '60-80mm': '92.3%'}
+오답 중 인접구간 비율: 99.1%
+
+보조회귀 s(연속값): R^2=0.961, MAE=2.71mm
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=15000) ===
+  Fx_board_N: R^2=0.948, MAE=0.0012mN
+  Fy_board_N: R^2=0.936, MAE=0.0031mN
+  F_mag(유도): R^2=0.939, MAE=0.0029mN
+
+=== 로봇 형상(L_M, phi) 회귀 성능 (n_val=15000) ===
+  L_M_mm: R^2=0.968, MAE=3.78mm
+  phi_deg: R^2=0.944, MAE=12.89deg
+
+저장: /home/user/mscr-mom/현서/scripts/contact_scenarios/fea/../../../models/position_segment_classifier_singleprobe_beta0180_4seg.pth
+
+총 소요시간: 24.3분
