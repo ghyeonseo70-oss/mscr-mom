@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import r2_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import GroupShuffleSplit, KFold
 from torch.utils.data import DataLoader, TensorDataset
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -98,19 +98,34 @@ def worker(args):
         m.eval()
         surrogates.append(m)
 
+    # 2026-08-19 비판적 리뷰 반영 #5: 대체모델(서로게이트) 10개 앙상블이 서로 크게 갈리는
+    # 지점 = 그 (L_M,phi,s,beta) 근처에 학습 시 참고할 실측 FEA가 부족해서 외삽하고 있다는
+    # 신호. 정규화된 공간에서 앙상블 표준편차를 같이 반환해서, 아래 worker 루프에서 이 불일치가
+    # 큰 샘플은 버리고 다시 뽑도록(rejection sampling) 함 - "모르는 영역"이 15만개에 조용히
+    # 섞여 들어가는 걸 막음.
+    DISAGREEMENT_TARGETS = [TARGETS.index(t) for t in
+                             ("tip_ux_avg_mm", "tip_uy_avg_mm", "tip_theta_deg_board",
+                              "Fx_total_N", "Fy_total_N")]
+
     def predict_surrogate(L_M, phi, beta, s, depth):
         x = np.array([[L_M, phi, beta, s, depth]])
         xn = (x - X_mean) / X_std
         xt = torch.tensor(xn, dtype=torch.float32)
         with torch.no_grad():
-            pn = np.mean([m(xt).numpy()[0] for m in surrogates], axis=0)
+            ens = np.array([m(xt).numpy()[0] for m in surrogates])
+        pn = ens.mean(axis=0)
+        disagreement = ens[:, DISAGREEMENT_TARGETS].std(axis=0).mean()  # 정규화 공간 기준
         p = pn * y_std + y_mean
-        return dict(zip(TARGETS, p))
+        return dict(zip(TARGETS, p)), disagreement
 
     rng = np.random.default_rng(2000 + widx)
     L_M_range = (0.0, 100.0)
     s_range = (10.0, 80.0)  # 팁쪽 80-100mm 제외 (힘이 너무 약해 실제 감지 불가로 판단)
     FIXED_DEPTH = 0.10
+    # 2026-08-19 비판적 리뷰 #5: 앙상블 불일치(정규화 표준편차) 임계값. 환경변수로 조절 가능
+    # (기본 0.5 - 대략 상위 20~30% 정도 불일치가 큰 샘플을 거름, 데이터 분포에 따라 다름).
+    DISAGREEMENT_THRESHOLD = float(os.environ.get("DISAGREEMENT_THRESHOLD", 0.5))
+    n_rejected = 0
 
     free_cache = {}
     Xb = np.zeros((n_chunk, N_PROBES, 3, 5, 5), dtype=np.float32)
@@ -126,6 +141,11 @@ def worker(args):
         depth = FIXED_DEPTH
         phi = rng.uniform(*PHI_RANGE)  # phi는 그대로 연속 샘플링(예측 대상 유지)
 
+        pred, disagreement = predict_surrogate(L_M, phi, beta, s, depth)
+        if disagreement > DISAGREEMENT_THRESHOLD:
+            n_rejected += 1
+            continue  # 서로게이트가 자신 없는(=실측 FEA가 부족한) 영역 - 다시 뽑음
+
         key = (round(L_M, 1), phi)
         if key in free_cache:
             r_free = free_cache[key]
@@ -138,7 +158,6 @@ def worker(args):
             if len(free_cache) > 4000:
                 free_cache.clear()
 
-        pred = predict_surrogate(L_M, phi, beta, s, depth)
         d_xL_local = pred["tip_uy_avg_mm"]
         d_yL_local = pred["tip_ux_avg_mm"]
         d_thL = -pred["tip_theta_deg_board"]
@@ -158,7 +177,7 @@ def worker(args):
         sb[n_ok] = s
         cb[n_ok] = [L_M, phi]
         n_ok += 1
-    return Xb, yb, fb, sb, cb
+    return Xb, yb, fb, sb, cb, n_rejected
 
 
 class SingleProbeClassifier(nn.Module):
@@ -204,10 +223,21 @@ if __name__ == "__main__":
             row = dict(DEFAULTS)
             row.update(r)
             all_rows.append(row)
-    print(f"대체모델 학습 데이터: {len(all_rows)}개 ({', '.join(SOURCES)})")
 
-    X = np.array([[r[f] for f in FEATURES] for r in all_rows])
-    y = np.array([[r[t] for t in TARGETS] for r in all_rows])
+    # 2026-08-19 비판적 리뷰 반영 #2: 실측 FEA를 전부 대체모델 학습에 써버리면 최종 CNN을
+    # "실제 물리"가 아니라 "대체모델의 자기 자신"으로만 검증하게 됨(순환검증). 20%를 대체모델
+    # 학습에서 아예 빼고, 맨 끝에서 이 CNN을 대체모델 없이 순수 실측값으로만 평가하는 데 씀.
+    rng_holdout = np.random.default_rng(42)
+    perm = rng_holdout.permutation(len(all_rows))
+    n_holdout = max(20, int(len(all_rows) * 0.2))
+    holdout_idx, fit_idx = perm[:n_holdout], perm[n_holdout:]
+    real_holdout_rows = [all_rows[i] for i in holdout_idx]
+    fit_rows = [all_rows[i] for i in fit_idx]
+    print(f"대체모델 학습 데이터: {len(fit_rows)}개 (전체 {len(all_rows)}개 중 {len(real_holdout_rows)}개는 "
+          f"순수 실측 검증용으로 분리, {', '.join(SOURCES)})")
+
+    X = np.array([[r[f] for f in FEATURES] for r in fit_rows])
+    y = np.array([[r[t] for t in TARGETS] for r in fit_rows])
     X_mean, X_std = X.mean(axis=0), X.std(axis=0)
     X_std[X_std < 1e-9] = 1.0
     y_mean, y_std = y.mean(axis=0), y.std(axis=0)
@@ -263,7 +293,9 @@ if __name__ == "__main__":
     f_all = np.concatenate([r[2] for r in results], axis=0)
     s_all = np.concatenate([r[3] for r in results], axis=0)
     c_all = np.concatenate([r[4] for r in results], axis=0)
-    print(f"합성 데이터 생성 완료: {len(y_all)}개 ({time.time()-t_gen:.0f}s)")
+    n_rejected_total = sum(r[5] for r in results)
+    print(f"합성 데이터 생성 완료: {len(y_all)}개 ({time.time()-t_gen:.0f}s), "
+          f"서로게이트 불일치로 거른 샘플: {n_rejected_total}개")
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
 
     np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_singleprobe_beta0180_4seg.npz"),
@@ -287,10 +319,19 @@ if __name__ == "__main__":
     X_mean2, X_std2 = X_all.mean(), X_all.std()
     X_norm = (X_all - X_mean2) / X_std2
 
-    rng2 = np.random.default_rng(0)
-    idx = rng2.permutation(len(X_norm))
-    split = int(0.9 * len(idx))
-    train_idx, val_idx = idx[:split], idx[split:]
+    # 2026-08-19 비판적 리뷰 #3: 그냥 무작위 90/10을 하면 free_cache로 (L_M,phi) 형상이
+    # 재사용되는 특성상 train/val에 "사실상 같은 형상, s/beta/depth만 다른" 샘플이 섞여
+    # 들어가서 val 정확도가 "안 본 형상 일반화력"이 아니라 "본 형상의 보간력"을 재는 문제가
+    # 있었음. (L_M,phi)를 10mm/10deg 격자로 묶어서 그룹 단위로 통째로 train 또는 val에
+    # 배정 - 같은 형상이 양쪽에 걸치지 않게 함.
+    L_M_bin = np.round(c_all[:, 0] / 10.0).astype(int)
+    phi_bin = np.round(c_all[:, 1] / 10.0).astype(int)
+    groups = L_M_bin * 1000 + phi_bin
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.1, random_state=0)
+    train_idx, val_idx = next(gss.split(X_norm, groups=groups))
+    print(f"train/val 분리: 형상(L_M,phi) 그룹 {len(np.unique(groups))}개 중 "
+          f"train {len(np.unique(groups[train_idx]))}개 / val {len(np.unique(groups[val_idx]))}개 "
+          f"(겹치는 그룹 {len(set(groups[train_idx]) & set(groups[val_idx]))}개)")
 
     N_EPOCHS = int(os.environ.get("N_EPOCHS", 60))
 
@@ -311,12 +352,24 @@ if __name__ == "__main__":
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
-    force_criterion = nn.MSELoss()
     s_criterion = nn.MSELoss()
     config_criterion = nn.MSELoss()
+    # 2026-08-19 비판적 리뷰 #1: 대체모델 5-fold R^2가 Fy_total_N=-0.01(사실상 노이즈, 평균보다도
+    # 못 맞춤)이라 이걸 "정답"으로 그대로 학습시키면 CNN이 서로게이트의 노이즈를 따라 배움.
+    # 완전히 빼는 대신(F_mag=sqrt(Fx^2+Fy^2) 유도 로직이 Fx,Fy 둘 다 필요해서 구조를 안 바꿔도
+    # 되게) 가중치를 1/10로 낮춰 신뢰 못 할 타겟이 학습을 왜곡하는 걸 줄임.
+    # ⚠️ 열 순서 주의: fb/fxy_all은 [Fy_total_N(로컬), Fx_total_N(로컬)] 순서로 저장됨(위
+    # worker()의 "축교환" 주석 - 보드좌표계 90도 회전 때문). 즉 0번 열이 R^2=-0.01인
+    # Fy_total_N(로컬)이고, 이게 나중에 force_names=["Fx_board_N","Fy_board_N"]로 "표시"만
+    # 될 뿐 실제 학습 순서는 그대로임 - 가중치를 반대로 넣으면 정작 나쁜 타겟이 그대로 살아있는
+    # 채로 고친 척하게 됨.
+    FORCE_LOSS_WEIGHTS = torch.tensor([0.1, 1.0], device=device)  # [Fy_total_N(로컬,나쁨), Fx_total_N(로컬,좋음)]
+
+    def weighted_force_loss(pred, true):
+        return (((pred - true) ** 2) * FORCE_LOSS_WEIGHTS).mean()
 
     t_train = time.time()
-    best_val_loss = float("inf")
+    best_bal_acc = -1.0
     best_state = None
     best_epoch = -1
     for epoch in range(N_EPOCHS):
@@ -325,7 +378,7 @@ if __name__ == "__main__":
             bx, by, bf, bs, bc = bx.to(device), by.to(device), bf.to(device), bs.to(device), bc.to(device)
             optimizer.zero_grad()
             seg_logits, force_pred, s_pred, config_pred = model(bx)
-            loss = (seg_criterion(seg_logits, by) + force_criterion(force_pred, bf)
+            loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf)
                     + s_criterion(s_pred, bs) + config_criterion(config_pred, bc))
             loss.backward()
             optimizer.step()
@@ -333,18 +386,27 @@ if __name__ == "__main__":
         with torch.no_grad():
             val_seg_logits, val_force_pred, val_s_pred, val_config_pred = model(val_X)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
-            val_force_loss = force_criterion(val_force_pred, val_f).item()
+            val_force_loss = weighted_force_loss(val_force_pred, val_f).item()
             val_s_loss = s_criterion(val_s_pred, val_s).item()
             val_config_loss = config_criterion(val_config_pred, val_c).item()
-            val_loss = val_seg_loss + val_force_loss + val_s_loss + val_config_loss
-            val_acc = (val_seg_logits.argmax(dim=1) == val_y).float().mean().item()
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+            val_pred_epoch = val_seg_logits.argmax(dim=1)
+            val_acc = (val_pred_epoch == val_y).float().mean().item()
+            # 2026-08-19 비판적 리뷰 #4: 체크포인트를 "4개 손실 단순합" 대신 실제 목표인
+            # 구간분류 balanced accuracy(클래스별 recall 평균) 기준으로 고름 - 손실 스케일이
+            # 서로 다른 4개 태스크를 더한 값이 우연히 낮다고 해서 분류 성능이 최선이란 보장이
+            # 없었음.
+            conf_epoch = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
+            for t, p in zip(val_y.tolist(), val_pred_epoch.tolist()):
+                conf_epoch[t, p] += 1
+            bal_acc = float(np.mean([conf_epoch[i, i].item() / max(1, conf_epoch[i].sum().item())
+                                      for i in range(N_CLASSES)]))
+        if bal_acc > best_bal_acc:
+            best_bal_acc = bal_acc
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             best_epoch = epoch + 1
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ConfigLoss {val_config_loss:.4f}")
-    print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (val loss 기준)")
+            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ConfigLoss {val_config_loss:.4f}")
+    print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (balanced accuracy 기준, {best_bal_acc*100:.1f}%)")
 
     model.load_state_dict(best_state)
     model.eval()
@@ -402,6 +464,93 @@ if __name__ == "__main__":
         mae = np.mean(np.abs(pred_i - true_i))
         unit = "mm" if name == "L_M_mm" else "deg"
         print(f"  {name}: R^2={r2:.3f}, MAE={mae:.2f}{unit}")
+
+    # 2026-08-19 비판적 리뷰 반영 #2: 지금까지의 val_* 지표는 전부 대체모델이 만든 합성데이터
+    # 안에서만 도는 순환검증(같은 서로게이트의 가정을 재확인하는 것)이라, 대체모델 학습에서
+    # 아예 제외해둔 real_holdout_rows(실측 FEA, 대체모델이 한 번도 못 본 값)로 별도 평가함.
+    # 이 블록은 worker()와 똑같은 로직(free-shape + 변위→B-field 차분)을 쓰되, 서로게이트
+    # 예측 대신 실측 FEA 값을 그대로 씀 - "이 모델이 시뮬레이션 자기 자신이 아니라 진짜
+    # FEA 물리에 맞는가"를 재는 유일한 지표.
+    print(f"\n=== 순수 실측 FEA 검증 (대체모델 안 거침, n={len(real_holdout_rows)}) ===")
+    sys.path.insert(0, FORCE_MODEL_DIR)
+    import force_model as fm_eval
+    import magpylib as magpy_eval
+    from scipy.spatial.transform import Rotation as Rot_eval
+
+    SENSOR_HEIGHT_MM = 15
+    sensor_positions_eval = [(x, y, SENSOR_HEIGHT_MM) for y in np.linspace(180, 0, 5) for x in np.linspace(0, 180, 5)]
+    sensors_eval = magpy_eval.Collection([magpy_eval.Sensor(position=pos) for pos in sensor_positions_eval])
+    MAGNET_BR_TESLA = 0.4
+    main_magnet_eval = magpy_eval.magnet.Cylinder(polarization=(0, MAGNET_BR_TESLA, 0), dimension=(2, 2))
+    mom_eval = magpy_eval.magnet.Cylinder(polarization=(0, -MAGNET_BR_TESLA, 0), dimension=(1, 8))
+    mscr_robot_eval = magpy_eval.Collection(main_magnet_eval, mom_eval)
+
+    def compute_B_eval(xLM_l, yLM_l, thLM, xL_l, yL_l, thL):
+        xLM_b, yLM_b = fm_eval.to_board_frame(xLM_l, yLM_l)
+        xL_b, yL_b = fm_eval.to_board_frame(xL_l, yL_l)
+        mom_eval.position = (float(xLM_b), float(yLM_b), 0)
+        mom_eval.orientation = Rot_eval.from_euler("z", -thLM, degrees=True)
+        main_magnet_eval.position = (float(xL_b), float(yL_b), 0)
+        main_magnet_eval.orientation = Rot_eval.from_euler("z", -thL, degrees=True)
+        return magpy_eval.getB(mscr_robot_eval, sensors_eval) * 1e6
+
+    real_X, real_y, real_f, real_s = [], [], [], []
+    for r in real_holdout_rows:
+        L_M, phi = r["L_M_mm"], r["phi_deg"]
+        s = r["contact_s_mm"]
+        try:
+            r_free = fm_eval.solve_shape(L_M=L_M, phi_deg=phi, loads=[])
+        except Exception:
+            continue
+        d_xL_local, d_yL_local = r["tip_uy_avg_mm"], r["tip_ux_avg_mm"]  # 축교환(worker()와 동일)
+        d_thL = -r["tip_theta_deg_board"]
+        frac = L_M / 100.0
+        d_xLM_local, d_yLM_local, d_thLM = d_xL_local * frac, d_yL_local * frac, d_thL * frac
+        xL_free, yL_free, thL_free = r_free["x_L"], r_free["y_L"], r_free["theta_L_deg"]
+        xLM_free, yLM_free, thLM_free = r_free["x_LM"], r_free["y_LM"], r_free["theta_LM_deg"]
+        B_free = compute_B_eval(xLM_free, yLM_free, thLM_free, xL_free, yL_free, thL_free)
+        B_load = compute_B_eval(xLM_free + d_xLM_local, yLM_free + d_yLM_local, thLM_free + d_thLM,
+                                 xL_free + d_xL_local, yL_free + d_yL_local, thL_free + d_thL)
+        real_X.append((B_load - B_free).reshape(5, 5, 3).transpose(2, 0, 1))
+        real_y.append(s_to_bin(s))
+        real_f.append([r["Fy_total_N"], r["Fx_total_N"]])  # fb와 동일 순서(축교환)
+        real_s.append(s)
+
+    if len(real_X) < 5:
+        print(f"  free-shape 계산 성공 케이스가 {len(real_X)}개뿐이라 통계적으로 의미 있는 평가 불가")
+    else:
+        real_X = np.array(real_X, dtype=np.float32)
+        real_X_norm = (real_X - X_mean2) / X_std2
+        real_y_arr = np.array(real_y)
+        real_f_arr = np.array(real_f, dtype=np.float32)
+        real_s_arr = np.array(real_s, dtype=np.float32)
+
+        model.eval()
+        with torch.no_grad():
+            rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5) - probe 차원 추가
+            r_seg_logits, r_force_pred, r_s_pred, _ = model(rX)
+            r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
+            r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
+            r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
+
+        real_acc = float((r_pred_class == real_y_arr).mean())
+        conf_r = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
+        for t, p in zip(real_y_arr, r_pred_class):
+            conf_r[t, p] += 1
+        real_bal_acc = float(np.mean([conf_r[i, i] / max(1, conf_r[i].sum()) for i in range(N_CLASSES)]))
+        print(f"  구간분류: acc={real_acc*100:.1f}%, balanced acc={real_bal_acc*100:.1f}% (n={len(real_y_arr)}, "
+              f"합성-val 기준 balanced acc={best_bal_acc*100:.1f}%와 비교할 것)")
+
+        ss_res = np.sum((r_s_phys - real_s_arr) ** 2)
+        ss_tot = np.sum((real_s_arr - real_s_arr.mean()) ** 2)
+        s_r2_real = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+        print(f"  s(연속값): R^2={s_r2_real:.3f}, MAE={np.mean(np.abs(r_s_phys - real_s_arr)):.2f}mm")
+
+        for i, name in enumerate(force_names):
+            ss_res = np.sum((r_force_phys[:, i] - real_f_arr[:, i]) ** 2)
+            ss_tot = np.sum((real_f_arr[:, i] - real_f_arr[:, i].mean()) ** 2)
+            r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+            print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(r_force_phys[:, i] - real_f_arr[:, i]))*1000:.4f}mN")
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "X_mean": X_mean2, "X_std": X_std2,
