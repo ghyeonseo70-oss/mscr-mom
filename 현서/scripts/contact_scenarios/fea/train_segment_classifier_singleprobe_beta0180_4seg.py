@@ -189,8 +189,12 @@ class SingleProbeClassifier(nn.Module):
 if __name__ == "__main__":
     t_start = time.time()
 
-    SOURCES = ["fea_lm_phi_pos_sweep_all.json", "fea_bent_contact_sweep.json",
-               "fea_geom_sweep_all.json", "fea_angle_sweep_all.json"]
+    # 2026-08-19: 옛 4개 파일(BR=0.36T, 논문피팅 K1/K2 기준, beta=0 고정)을 새 재료값
+    # (BR=0.4T, MATLAB E*I 기준 K1/K2) 스윕 1개로 교체. 옛 파일들은 beta_deg가 전부 0.0으로
+    # 고정돼있어 대체모델이 beta=180 입력을 한 번도 실제로 학습 못 하고 외삽만 했었는데(잠재
+    # 버그), 이 새 파일은 beta=0(133개)/180(48개) 실측이 둘 다 있어서 그 문제도 같이 해결됨
+    # (beta=180 대칭성은 check_beta180_symmetry.py로 검증됨, 별도 부호반전 증강 불필요).
+    SOURCES = ["fea_lm_phi_pos_matv2_all.json"]
     all_rows = []
     for fname in SOURCES:
         path = os.path.join(FEA_DATA_DIR, fname)
