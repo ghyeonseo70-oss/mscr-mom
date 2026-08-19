@@ -17,12 +17,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--L_M", type=float, default=50.0)
 parser.add_argument("--phi", type=float, default=60.0)
 parser.add_argument("--out", type=str, default=None)
+parser.add_argument("--n_spline_points", type=int, default=40,
+                     help="스플라인 근사 점 개수 (2026-08-19 메쉬 세밀화 파일럿용 - 기본값 40은 "
+                          "기존 파이프라인과 동일하게 유지, 안 넘기면 동작 안 바뀜)")
 args = parser.parse_args()
 
 # 대표 구동상태 (기존 force_model.py __main__ 예시와 동일한 값 사용)
 L_M = args.L_M
 PHI_DEG = args.phi
-N_SPLINE_POINTS = 40  # 곡선을 스플라인으로 근사할 때 쓸 점 개수(너무 많으면 gmsh가 느려짐)
+N_SPLINE_POINTS = args.n_spline_points  # 곡선을 스플라인으로 근사할 때 쓸 점 개수(너무 많으면 gmsh가 느려짐)
 
 r = fm.solve_shape(L_M=L_M, phi_deg=PHI_DEG, loads=[], return_curve=True)
 
