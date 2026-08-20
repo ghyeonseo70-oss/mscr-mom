@@ -1,0 +1,56 @@
+대체모델 학습 데이터: 322개 (전체 402개 중 80개는 순수 실측 검증용으로 분리, fea_lm_phi_pos_matv2_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용) ===
+  tip_ux_avg_mm: R^2=0.847
+  tip_uy_avg_mm: R^2=0.849
+  tip_uz_avg_mm: R^2=-0.923
+  tip_theta_deg_board: R^2=0.958
+  Fx_total_N: R^2=0.948
+  Fy_total_N: R^2=0.486
+  Fz_total_N: R^2=-0.980
+  F_mag_N: R^2=0.971
+대체모델 학습 완료 (173s)
+150000개 단일관측(beta=0/180도 한정) 합성 데이터 생성 시작 (32-way 병렬)...
+합성 데이터 생성 완료: 150000개 (1206s), 서로게이트 불일치로 거른 샘플: 6102개
+구간별 샘플 수: {0: 18766, 1: 42044, 2: 44491, 3: 44699}
+최종 분류기 학습 시작 (device=cuda)...
+train/val 분리: 형상(L_M,phi) 그룹 341개 중 train 306개 / val 35개 (겹치는 그룹 0개)
+Epoch [ 1/60] ValAcc  71.3%  BalAcc  71.4%  SegLoss 0.6606  ForceLoss 0.2463  SLoss 0.2239  ConfigLoss 0.3369
+Epoch [ 5/60] ValAcc  77.0%  BalAcc  77.7%  SegLoss 0.5346  ForceLoss 0.1146  SLoss 0.1757  ConfigLoss 0.1923
+Epoch [10/60] ValAcc  82.8%  BalAcc  83.6%  SegLoss 0.4150  ForceLoss 0.0830  SLoss 0.1198  ConfigLoss 0.1792
+Epoch [15/60] ValAcc  85.2%  BalAcc  85.8%  SegLoss 0.3617  ForceLoss 0.0847  SLoss 0.0937  ConfigLoss 0.1490
+Epoch [20/60] ValAcc  85.1%  BalAcc  85.9%  SegLoss 0.3640  ForceLoss 0.0786  SLoss 0.0883  ConfigLoss 0.1251
+Epoch [25/60] ValAcc  84.6%  BalAcc  85.3%  SegLoss 0.3688  ForceLoss 0.0649  SLoss 0.0895  ConfigLoss 0.1156
+Epoch [30/60] ValAcc  87.0%  BalAcc  87.8%  SegLoss 0.3240  ForceLoss 0.0606  SLoss 0.0848  ConfigLoss 0.1316
+Epoch [35/60] ValAcc  86.3%  BalAcc  86.7%  SegLoss 0.3560  ForceLoss 0.0660  SLoss 0.0864  ConfigLoss 0.1424
+Epoch [40/60] ValAcc  87.4%  BalAcc  87.8%  SegLoss 0.3102  ForceLoss 0.0604  SLoss 0.0771  ConfigLoss 0.1128
+Epoch [45/60] ValAcc  86.1%  BalAcc  86.7%  SegLoss 0.3400  ForceLoss 0.0592  SLoss 0.0890  ConfigLoss 0.1294
+Epoch [50/60] ValAcc  85.9%  BalAcc  86.1%  SegLoss 0.3538  ForceLoss 0.0579  SLoss 0.0903  ConfigLoss 0.1338
+Epoch [55/60] ValAcc  87.3%  BalAcc  88.0%  SegLoss 0.3065  ForceLoss 0.0511  SLoss 0.0740  ConfigLoss 0.0972
+Epoch [60/60] ValAcc  87.6%  BalAcc  88.0%  SegLoss 0.3172  ForceLoss 0.0556  SLoss 0.0760  ConfigLoss 0.0840
+학습 완료 (124s), 최적 epoch=59 (balanced accuracy 기준, 88.4%)
+
+=== 최종 검증 정확도: 88.1% (n_val=15509), 무작위 기준선=25.0% ===
+balanced accuracy(구간별 recall 평균): 88.4%
+구간별 recall: {'0-20mm': '89.8%', '20-40mm': '87.2%', '40-60mm': '85.1%', '60-80mm': '91.4%'}
+오답 중 인접구간 비율: 97.0%
+
+보조회귀 s(연속값): R^2=0.933, MAE=3.40mm
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=15509) ===
+  Fx_board_N: R^2=0.811, MAE=0.0019mN
+  Fy_board_N: R^2=0.909, MAE=0.0035mN
+  F_mag(유도): R^2=0.924, MAE=0.0032mN
+
+=== 로봇 형상(L_M, phi) 회귀 성능 (n_val=15509) ===
+  L_M_mm: R^2=0.906, MAE=5.56mm
+  phi_deg: R^2=0.906, MAE=15.88deg
+
+=== 순수 실측 FEA 검증 (대체모델 안 거침, n=80) ===
+  구간분류: acc=71.2%, balanced acc=73.9% (n=80, 합성-val 기준 balanced acc=88.4%와 비교할 것)
+  s(연속값): R^2=0.820, MAE=7.96mm
+  Fx_board_N: R^2=0.729, MAE=0.0040mN
+  Fy_board_N: R^2=0.646, MAE=0.0149mN
+
+저장: /home/user/mscr-mom/현서/scripts/contact_scenarios/fea/../../../models/position_segment_classifier_singleprobe_beta0180_4seg.pth
+
+총 소요시간: 25.2분
