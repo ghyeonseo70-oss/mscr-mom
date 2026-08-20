@@ -13,7 +13,10 @@
 # (이전엔 나중에 별도 재시도 라운드로 STABILIZE를 붙였는데) 이번엔 처음부터 켜진 채로 돎 -
 # 별도 재시도 라운드 불필요.
 #
-# LM(4) x phi(9) x s(10) = 360케이스, beta=0만(beta=180은 이미 대칭성 검증 완료, 재확인 불필요).
+# LM(4) x phi(11, 0/+-30/+-60/+-90/+-120/+-150) x s(10) = 440케이스가 원래 최대치이나,
+# 아래 BAD_COMBOS 6개(L_M=62.5mm의 +-150, L_M=87.5mm의 +-120/+-150 - 해석모델이 잘못된
+# 해의 branch를 계산하는 격자점, 자세한 근거는 아래 파이썬 블록 주석 참고)를 제외해
+# 실제로는 38조합 x s(10) = 380케이스. beta=0만(beta=180은 이미 대칭성 검증 완료, 재확인 불필요).
 set -u
 cd "$(dirname "$0")"
 date +%s > lm_densify_matv2_pipeline_start_time.txt
@@ -22,12 +25,23 @@ python3 - <<'PYEOF' > lm_densify_matv2_combos.txt
 LM_LIST = [12.5, 37.5, 62.5, 87.5]
 PHI_LIST = [0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0, 120.0, -120.0, 150.0, -150.0]
 
+# 2026-08-20 추가: force_model.py의 힌트 없는 solve_shape()(실제 이 워커가 쓰는 방식)로
+# 격자점을 직접 확인한 결과, 아래 6개 조합은 해석모델이 잘못된 해(branch)를 계산함
+# (theta_L이 phi 증가에도 갑자기 줄어드는 등 물리적으로 불가능한 역전 발생).
+# FEA 메쉬는 만들어지고 성공할 수도 있지만, 애초에 틀린 형상 위에 만든 것이라 틀린 물리를
+# 학습시키게 되므로 스윕에서 제외:
+#   L_M=62.5mm: phi=+-150 (연속법 기준 130->135도 부근에서 이미 jump, 격자점 기준 150도가 오답)
+#   L_M=87.5mm: phi=+-120, +-150 (연속법 기준 100->105도 부근에서 jump, 두 격자점 다 오답)
+BAD_COMBOS = {(62.5, 150.0), (62.5, -150.0), (87.5, 120.0), (87.5, -120.0), (87.5, 150.0), (87.5, -150.0)}
+
 def tag_of(lm, phi):
     sign = "N" if phi < 0 else ("0" if phi == 0 else "P")
     return f"LMD{int(lm*10)}_phi{sign}{int(abs(phi))}_b0"  # 12.5mm -> LMD125 (점 없이, 파일명 안전하게)
 
 for lm in LM_LIST:
     for phi in PHI_LIST:
+        if (lm, phi) in BAD_COMBOS:
+            continue
         print(f"{lm} {phi} 0 {tag_of(lm, phi)}")
 PYEOF
 
