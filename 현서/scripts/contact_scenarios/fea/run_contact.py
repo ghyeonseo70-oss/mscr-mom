@@ -31,7 +31,8 @@ WIRE_R_MM = 0.05  # mm, make_bent_contact_scene.py의 WIRE_R와 반드시 같아
 
 def build_inp(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_sets.inp",
               job_name="contact_test", push_dir=(1.0, 0.0, 0.0), contact_stiffness=None,
-              print_tip=False, inc=100, initial_inc=0.01):
+              print_tip=False, inc=100, initial_inc=0.01, min_inc=None, max_inc=None,
+              stabilize=None):
     """push_dir: 접촉점에서 튜브 표면 바깥쪽을 향하는 법선(구가 원래 놓인 쪽) 방향.
     실제 변위는 이 방향의 반대(-push_dir)로 push_depth만큼 줘서 눌러 들어가게 함.
     직선 튜브는 구가 +X쪽에 있어서 기본값이 (1,0,0)이지만, 굽은 튜브는 접촉점마다 법선이
@@ -56,6 +57,27 @@ def build_inp(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_s
     # 위치기반으로 묶어서(별도 접촉/TIE 없이) 두 재질이 같이 변형하게 만듦 - 콘크리트 속 철근
     # 모델링과 동일한 표준기법. 빔 단면은 원형(SECTION=CIRC), 법선(0,0,1)은 굽힘평면(board
     # z축 고정, make_bent_contact_scene.py 참고)과 항상 수직이라 빔축과 절대 평행하지 않음.
+    # 2026-08-19 추가: phi=+-30 파일럿(1-C) - *STATIC 문법(Abaqus/CalculiX):
+    # 초기증분,전체시간,[최소증분,최대증분]. 지금까지는 최소증분을 명시 안 해서 CalculiX
+    # 기본값(대략 전체시간의 1e-5배)에 막혀 있었을 수 있음 - min_inc를 아주 작게 주면
+    # 실패 직전까지 더 잘게 쪼개서 재시도할 여지가 생김. 이전에 폐기된 "INC 조정"(inc/
+    # initial_inc)과는 다른 레버라 겹치지 않음. min_inc/max_inc 둘 다 None이면(기본값)
+    # 기존과 완전히 동일한 2필드 STATIC 줄 - 기존 스윕 동작 안 바뀜.
+    static_line = f"{initial_inc}, 1.0"
+    if min_inc is not None or max_inc is not None:
+        static_line += f", {min_inc if min_inc is not None else 1e-10}, {max_inc if max_inc is not None else 1.0}"
+
+    # STABILIZE: 접촉+대변형 비선형이 불안정할 때 인공(점성) 감쇠를 넣어 평형해를 찾기 쉽게
+    # 하는 옵션(Abaqus/CalculiX *STATIC 파라미터). stabilize=True면 CalculiX 기본 감쇠(자동),
+    # 숫자면 그 값을 감쇠계수(에너지 소산비)로 명시. CalculiX 2.17에서 정확한 기본값/문법을
+    # 검증 못 해서(매뉴얼 미확인) 우선 가장 표준적인 형태로 시도 - 문법이 틀리면 ccx가
+    # "*ERROR"로 바로 알려주므로 결과 로그에서 확인할 것.
+    static_keyword = "*STATIC"
+    if stabilize is True:
+        static_keyword = "*STATIC,STABILIZE"
+    elif stabilize is not None:
+        static_keyword = f"*STATIC,STABILIZE={stabilize}"
+
     with open(os.path.join(HERE, inp_name), encoding="latin-1") as f:
         has_wire = "ELSET=WIRE_BEAM" in f.read().upper()
     wire_block = f"""*MATERIAL, NAME=NITINOL
@@ -103,8 +125,8 @@ S_TUBE_OUTER, S_BALL
 N_FIXED, 1, 3
 **
 *STEP, NLGEOM, INC={inc}
-*STATIC
-{initial_inc}, 1.0
+{static_keyword}
+{static_line}
 *BOUNDARY
 N_BALL_ALL, 1, 1, {dx:.6E}
 N_BALL_ALL, 2, 2, {dy:.6E}
@@ -337,11 +359,13 @@ def get_tip_rotation_deg(job_name, inp_name, sets_name):
 
 def run_case(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_sets.inp",
              job_name="contact_test", timeout=800, verbose=True, push_dir=(1.0, 0.0, 0.0),
-             print_tip=False, n_threads=CCX_THREADS, inc=100, initial_inc=0.01):
+             print_tip=False, n_threads=CCX_THREADS, inc=100, initial_inc=0.01,
+             min_inc=None, max_inc=None, stabilize=None):
     # 굽은 튜브 접촉해석에서 600초로 했다가 실제로는 100% 완료됐는데 그 직후 타임아웃에
     # 걸려서 결과를 놓칠 뻔한 적이 있어서(.sta로는 완료 확인, .dat도 무사히 써짐) 여유를 더 둠.
     build_inp(push_depth, inp_name, sets_name, job_name, push_dir=push_dir, print_tip=print_tip,
-              inc=inc, initial_inc=initial_inc)
+              inc=inc, initial_inc=initial_inc, min_inc=min_inc, max_inc=max_inc,
+              stabilize=stabilize)
     if verbose:
         print(f"CalculiX 실행 중 (push_depth={push_depth}mm, push_dir={push_dir})...")
     result = run_ccx(job_name, timeout, n_threads=n_threads)
