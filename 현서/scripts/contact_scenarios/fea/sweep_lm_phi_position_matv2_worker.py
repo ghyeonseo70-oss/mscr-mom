@@ -77,7 +77,7 @@ for n, contact_s in enumerate(S_LIST, 1):
         res = rc.run_case(
             PUSH_DEPTH, inp_name=inp_name, sets_name=sets_name, job_name=job_name,
             timeout=1800, verbose=False, push_dir=tuple(normal), n_threads=args.threads,
-            print_tip=True,
+            print_tip=True, stabilize=True,
         )
     except Exception as e:
         print(f"  [{tag}] 실패: {e}", flush=True)
