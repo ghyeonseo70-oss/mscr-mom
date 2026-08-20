@@ -43,13 +43,16 @@ MU0 = 4 * np.pi * 1e-7
 # E=850kPa, 단면 D=2mm/D2=1mm 중공관)에서 K=E*I를 직접 계산. K1(MOM 구간)은 코드의 EN=2
 # 배율을 그대로 반영(K1=2*K2). 논문 피팅값(K1=3.82e-6~2.25e-6, K2=9.89e-7~8.53e-7)보다
 # 전반적으로 작음 - 어느 쪽이 실제에 더 가까운지는 아직 실측으로 검증 안 됨.
+# 2026-08-20: K_RIGID(3구간, MOM 8mm 완전강체) 폐기 - 실제 CalculiX FEA 메쉬가 베이스~팁
+# 전체에 균일 재질만 쓰고 MOM 구간에 별도 강체 재질을 준 적이 없다는 걸 확인함(강체 재질은
+# 인덴터 공에만 씀). solve_shape()는 이제 순수 2구간(K1/K2, L_M 한 점에서 전환)으로 풂 -
+# 교수님 MATLAB 코드와도, 실제 FEA 메쉬 가정과도 일치.
 E_YOUNG = 850 * 1000  # Pa
 D_OUTER, D_INNER = 0.002, 0.001  # m, 중공관 바깥/안지름
 I_SECTION = D_OUTER**4 * np.pi / 64 - D_INNER**4 * np.pi / 64  # 단면 2차모멘트, m^4
 EN_FACTOR = 2.0  # MATLAB 코드의 EN - 구간1(MOM측)이 구간2보다 이만큼 뻣뻣하다고 가정
 K2 = E_YOUNG * I_SECTION   # N*m^2
 K1 = EN_FACTOR * K2        # N*m^2
-K_RIGID = 1e6 * max(K1, K2)
 
 BR = 0.4  # T (교수님 제공 MATLAB 코드(code(2).txt) 값과 일치시킴 - 기존 0.36T(3600G 실측값)에서 변경)
 M_MAG = BR / MU0
@@ -104,8 +107,14 @@ def solve_shape(L_M, phi_deg, loads=None, s_t=None, Fx=0.0, Fy=0.0, return_curve
     L_m = L / 1000.0
     H_M_m = H_M / 1000.0
     L_M_m = L_M / 1000.0
-    a1 = np.clip(L_M_m - H_M_m / 2, 0, L_m)
-    a2 = np.clip(L_M_m + H_M_m / 2, 0, L_m)
+
+    # 2026-08-20: 3구간(K1/K_RIGID/K2, MOM 8mm을 완전강체로 취급)에서 2구간(K1/K2, 교수님
+    # MATLAB 코드와 동일 - L_M 한 점에서 바로 전환)으로 되돌림. 이유: 실제 CalculiX FEA
+    # 메쉬가 베이스~팁 전체에 똑같은 실리콘 재질(material_convert.py의 단일 E)만 쓰고
+    # MOM 구간에 별도 강체 재질을 준 적이 없다는 걸 확인함(강체 재질 RIGID_MAT은 인덴터
+    # 공에만 씀, run_contact.py) - 즉 K_RIGID는 실제 FEA 물리와 안 맞는, 순수 해석모델만의
+    # 가정이었음. 2구간이 실제 FEA 메쉬(균일 재질) 가정과 일치함.
+    a1 = L_M_m  # 단일 전환점(옛 K1/K_RIGID 경계였던 이름을 그대로 재사용 - 아래 참조 코드 호환용)
 
     # loads를 m 단위로 변환
     loads_m = []
@@ -116,8 +125,8 @@ def solve_shape(L_M, phi_deg, loads=None, s_t=None, Fx=0.0, Fy=0.0, return_curve
             s0, s1 = ld["s_start"] / 1000.0, ld["s_end"] / 1000.0
             loads_m.append({"type": "dist", "s_start": s0, "s_end": s1, "Fx": ld["Fx"], "Fy": ld["Fy"]})
 
-    # 전체 구간을 쪼갤 breakpoint들: 0, a1, a2, L_m, 각 하중의 경계들
-    breakpoints = {0.0, a1, a2, L_m}
+    # 전체 구간을 쪼갤 breakpoint들: 0, L_M(단일 전환점), L_m, 각 하중의 경계들
+    breakpoints = {0.0, a1, L_m}
     for ld in loads_m:
         if ld["type"] == "point":
             if 0 < ld["s"] < L_m:
@@ -129,11 +138,7 @@ def solve_shape(L_M, phi_deg, loads=None, s_t=None, Fx=0.0, Fy=0.0, return_curve
     breakpoints = sorted(breakpoints)
 
     def K_of_s(s_mid):
-        if s_mid < a1:
-            return K1
-        elif s_mid < a2:
-            return K_RIGID
-        return K2
+        return K1 if s_mid < a1 else K2
 
     def q_of_s(s_mid):
         """s_mid 지점에서의 분포하중 밀도 (N/m). 여러 분포하중이 겹치면 합산."""
@@ -211,11 +216,14 @@ def solve_shape(L_M, phi_deg, loads=None, s_t=None, Fx=0.0, Fy=0.0, return_curve
                     state[4] += ld["Fx"]
                     state[5] += ld["Fy"]
 
-            # s_lo가 a1(=MOM 시작점)이면: MOM 토크 jump 되돌리기 + 위치 캡처
+            # s_lo가 a1(=L_M, MOM 위치)이면: MOM 토크 jump 되돌리기 + 위치 캡처.
+            # 2구간 모델에선 MOM이 물리적 폭을 가진 강체 구간이 아니라 s=L_M 한 점에서의
+            # 토크원(punctual torque source)이라, 옛 3구간 때처럼 H_M_m/2만큼 밀어줄 필요가
+            # 없음 - 그 지점의 적분 상태(x,y)가 곧 MOM 위치.
             if abs(s_lo - a1) < 1e-9 and theta_LM_captured is None:
                 theta_LM_captured = state[0]
-                x_LM_captured = state[1] + (H_M_m / 2) * np.cos(state[0])
-                y_LM_captured = state[2] + (H_M_m / 2) * np.sin(state[0])
+                x_LM_captured = state[1]
+                y_LM_captured = state[2]
                 state[3] = state[3] + tau1(state[0])
 
         curve = (np.array(curve_s), np.array(curve_x), np.array(curve_y), np.array(curve_theta)) if collect_curve else None

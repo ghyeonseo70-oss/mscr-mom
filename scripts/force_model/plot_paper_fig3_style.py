@@ -53,45 +53,48 @@ hero.add_patch(plt.Rectangle((0, 0), 1, 1, transform=hero.transAxes, facecolor="
                               edgecolor="#2451A3", linewidth=1.5))
 hero.text(0.02, 0.5, "K1, K2, M1", fontsize=28, fontweight="bold", color="#2451A3",
           transform=hero.transAxes, va="center", ha="left")
-hero.text(0.19, 0.5, "논문 Fig.3 디지털화 + 최소자승 피팅으로 확보\n"
-                     "-> 굽힘강성·자기모멘트 상수를 실측 없이 논문 데이터로부터 역산",
+hero.text(0.19, 0.5, f"교수님 MATLAB 코드(E*I 직접계산) 방식 - BR={fm.BR}T, K1={fm.K1:.3e}, K2={fm.K2:.3e} N*m^2\n"
+                     "-> 접촉(외력) 없는 자유단 형상만, 논문 Fig.3(a)-(d)와 같은 구도로 재현",
           fontsize=13, fontweight="bold", color="#193A7D", transform=hero.transAxes,
           va="center", ha="left", linespacing=1.4)
 
 axes = [fig.add_subplot(gs[1, i]) for i in range(4)]
 for a in axes[1:]:
     a.sharey(axes[0])
-colors = plt.cm.turbo(np.linspace(0.05, 0.95, len(PHI_LIST)))
+# 2026-08-19: 논문 Fig.3(a)-(d)와 직접 비교하려고 turbo 연속컬러맵 대신 논문(=MATLAB 기본
+# 팔레트)과 완전히 같은 6색 고정 배색으로 교체 - |phi| 그룹별 1색, +/-는 같은 색(논문처럼).
+# 전엔 연속 turbo라 "빨강"이 서로 다른 각도를 가리켜서 논문과 나란히 비교하면 헷갈렸음.
+PHI_COLORS = {0: "#0072BD", 30: "#D95319", 60: "#EDB120", 90: "#7E2F8E", 120: "#77AC30", 150: "#4DBEEE"}
 
 for ax, ratio in zip(axes, LM_RATIOS):
     L_M = max(ratio * fm.L, 0.5)  # L_M=0은 특이점이라 0.5mm로 근사(사실상 MOM 없음/CMSCR)
     trace = continuation_sweep(L_M, PHI_LIST)
-    for phi_deg, c in zip(PHI_LIST, colors):
+    for phi_deg in PHI_LIST:
         if phi_deg not in trace:
             continue
+        c = PHI_COLORS[abs(phi_deg)]
         hint = trace[phi_deg]["theta_L_deg"]
         r = fm.solve_shape(L_M=L_M, phi_deg=phi_deg, loads=[], return_curve=True,
                             theta_L_hint_deg=hint)
-        ax.plot(r["curve_x_mm"], r["curve_y_mm"], color=c, linewidth=1.8)
-        ax.plot(r["x_L"], r["y_L"], "o", color=c, markersize=4)
+        ax.plot(r["curve_x_mm"] / 10, r["curve_y_mm"] / 10, color=c, linewidth=1.8)
     ax.plot(0, 0, "ks", markersize=8)
     title = "CMSCR (MOM 없음, L_M/L=0)" if ratio == 0 else f"L_M/L = {ratio}"
     ax.set_title(title, fontweight="bold", fontsize=12)
-    ax.set_xlabel("x (mm, 로컬)")
-    ax.set_xlim(-30, 100)
-    ax.set_ylim(-90, 90)
+    ax.set_xlabel("x (cm, 로컬)")
+    ax.set_xlim(-3, 10)
+    ax.set_ylim(-9, 9)
     ax.set_aspect("equal")
     ax.grid(True, linestyle=":", alpha=0.5)
     ax.axhline(0, color="gray", linewidth=0.6)
 
-axes[0].set_ylabel("y (mm, 로컬)")
+axes[0].set_ylabel("y (cm, 로컬)")
 
-# 컬러바 대신 범례용 텍스트
-sm = plt.cm.ScalarMappable(cmap="turbo", norm=plt.Normalize(vmin=min(PHI_LIST), vmax=max(PHI_LIST)))
-cbar = fig.colorbar(sm, ax=axes, orientation="horizontal", fraction=0.05, pad=0.15, aspect=40)
-cbar.set_label("외부자기장 방향 φ (deg)")
+from matplotlib.lines import Line2D
+legend_handles = [Line2D([0], [0], color=PHI_COLORS[abs(p)], lw=2, label=f"φ = ±{p}°" if p else "φ = 0")
+                  for p in [0, 30, 60, 90, 120, 150]]
+axes[-1].legend(handles=legend_handles, loc="center left", bbox_to_anchor=(1.02, 0.5), fontsize=10)
 
-fig.suptitle("논문 Fig.3(a)-(d) 스타일 재현 - L_M/L에 따른 형상 비교 (φ = -150°~150° 스윕)",
+fig.suptitle("논문 Fig.3(a)-(d)와 같은 배색으로 재현 - L_M/L에 따른 형상 비교 (직접 대조용)",
              fontweight="bold", fontsize=14, y=1.005)
 
 out_path = "../../data/force_model/paper_fig3_style.png"
