@@ -34,9 +34,18 @@ parser.add_argument("--phi", type=float, required=True)
 parser.add_argument("--beta", type=float, required=True, help="0 또는 180 (원주방향 접촉각)")
 parser.add_argument("--threads", type=int, default=4)
 parser.add_argument("--tag", type=str, required=True, help="파일명용 접미사 (예: LM25_phiN90_b0)")
+parser.add_argument("--s_list", type=str, default=None,
+                     help="쉼표구분 s(mm) 목록으로 기본 S_LIST 덮어쓰기 (예: '15,25,35') - "
+                          "2026-08-21 phi=90~150 구간 s 격자 조밀화용으로 추가")
+parser.add_argument("--stabilize_value", type=float, default=None,
+                     help="stabilize=True(자동감쇠) 대신 명시적 감쇠계수 지정 (*STATIC,STABILIZE=값) - "
+                          "2026-08-21 STABILIZE 감쇠값 튜닝 파일럿용으로 추가")
 args = parser.parse_args()
 
 L_M, phi, beta, tag = args.L_M, args.phi, args.beta, args.tag
+if args.s_list is not None:
+    S_LIST = [float(v) for v in args.s_list.split(",")]
+stabilize_arg = args.stabilize_value if args.stabilize_value is not None else True
 
 centerline_path = os.path.join(HERE, f"matv2_centerline_{tag}.json")
 subprocess.run(
@@ -77,7 +86,7 @@ for n, contact_s in enumerate(S_LIST, 1):
         res = rc.run_case(
             PUSH_DEPTH, inp_name=inp_name, sets_name=sets_name, job_name=job_name,
             timeout=1800, verbose=False, push_dir=tuple(normal), n_threads=args.threads,
-            print_tip=True, stabilize=True,
+            print_tip=True, stabilize=stabilize_arg,
         )
     except Exception as e:
         print(f"  [{tag}] 실패: {e}", flush=True)
