@@ -506,7 +506,7 @@ if __name__ == "__main__":
         main_magnet_eval.orientation = Rot_eval.from_euler("z", -thL, degrees=True)
         return magpy_eval.getB(mscr_robot_eval, sensors_eval) * 1e6
 
-    real_X, real_y, real_f, real_s = [], [], [], []
+    real_X, real_y, real_f, real_s, real_c = [], [], [], [], []
     for r in real_holdout_rows:
         L_M, phi = r["L_M_mm"], r["phi_deg"]
         s = r["contact_s_mm"]
@@ -527,6 +527,7 @@ if __name__ == "__main__":
         real_y.append(s_to_bin(s))
         real_f.append([r["Fy_total_N"], r["Fx_total_N"]])  # fb와 동일 순서(축교환)
         real_s.append(s)
+        real_c.append([L_M, phi])  # config_names=["L_M_mm","phi_deg"]와 동일 순서
 
     if len(real_X) < 5:
         print(f"  free-shape 계산 성공 케이스가 {len(real_X)}개뿐이라 통계적으로 의미 있는 평가 불가")
@@ -536,14 +537,16 @@ if __name__ == "__main__":
         real_y_arr = np.array(real_y)
         real_f_arr = np.array(real_f, dtype=np.float32)
         real_s_arr = np.array(real_s, dtype=np.float32)
+        real_c_arr = np.array(real_c, dtype=np.float32)
 
         model.eval()
         with torch.no_grad():
             rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5) - probe 차원 추가
-            r_seg_logits, r_force_pred, r_s_pred, _ = model(rX)
+            r_seg_logits, r_force_pred, r_s_pred, r_config_pred = model(rX)
             r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
             r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
             r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
+            r_config_phys = r_config_pred.cpu().numpy() * c_std + c_mean
 
         real_acc = float((r_pred_class == real_y_arr).mean())
         conf_r = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
@@ -563,6 +566,18 @@ if __name__ == "__main__":
             ss_tot = np.sum((real_f_arr[:, i] - real_f_arr[:, i].mean()) ** 2)
             r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
             print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(r_force_phys[:, i] - real_f_arr[:, i]))*1000:.4f}mN")
+
+        # 2026-08-25 추가: config_head(L_M,phi)도 지금까지 seg/s/force와 달리 합성-val로만
+        # 검증하고 실측 홀드아웃 검증이 빠져있었음 - 힘 추정 때 겪은 것과 같은 종류의 맹점이라
+        # 똑같이 채움.
+        for i, name in enumerate(config_names):
+            pred_i, true_i = r_config_phys[:, i], real_c_arr[:, i]
+            ss_res = np.sum((pred_i - true_i) ** 2)
+            ss_tot = np.sum((true_i - true_i.mean()) ** 2)
+            r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+            unit = "mm" if name == "L_M_mm" else "deg"
+            print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.2f}{unit} "
+                  f"(합성-val 기준 R^2={r2_score(val_c_phys[:, i], val_config_pred_phys[:, i]):.3f}와 비교할 것)")
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "X_mean": X_mean2, "X_std": X_std2,
