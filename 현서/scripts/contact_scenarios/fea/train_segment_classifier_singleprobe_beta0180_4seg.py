@@ -11,6 +11,7 @@ force_model.py의 solve_shape()는 원래부터 정역학/기구학 모델.
   (beta 제외 실험(90/270 근처만 빼기)은 이미 별도로 해봤고 득이 없었음 - 이번은 그거랑
   다르게 아예 0/180 두 값으로 극단적으로 좁히는 실험)
 """
+import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -227,10 +228,21 @@ if __name__ == "__main__":
     # 2026-08-19 비판적 리뷰 반영 #2: 실측 FEA를 전부 대체모델 학습에 써버리면 최종 CNN을
     # "실제 물리"가 아니라 "대체모델의 자기 자신"으로만 검증하게 됨(순환검증). 20%를 대체모델
     # 학습에서 아예 빼고, 맨 끝에서 이 CNN을 대체모델 없이 순수 실측값으로만 평가하는 데 씀.
-    rng_holdout = np.random.default_rng(42)
-    perm = rng_holdout.permutation(len(all_rows))
-    n_holdout = max(20, int(len(all_rows) * 0.2))
-    holdout_idx, fit_idx = perm[:n_holdout], perm[n_holdout:]
+    #
+    # 2026-08-25 수정: 예전엔 rng(42).permutation(len(all_rows))로 뽑았는데, 이러면 데이터가
+    # 늘 때마다(예: 404->518개) 같은 시드를 써도 뽑히는 "행" 자체가 완전히 달라져서, 회차 간
+    # 홀드아웃 R^2를 비교하는 게 원래 의미가 없었음(phi=90~150 s격자 조밀화 후 Fx_board R^2가
+    # 0.729->0.462로 "악화"돼 보였던 게 실은 홀드아웃 구성이 바뀌어서였다는 게
+    # _diag_holdout_phi_breakdown.py로 확인됨 - 저각도만 떼어보면 여전히 0.64로 정상).
+    # 대신 각 행 고유키(L_M,phi,beta,s)를 해시해서 결정하면, 데이터가 늘어도 "기존 행"의
+    # 홀드아웃 소속은 절대 안 바뀌고 새 행만 새로 배정됨 - 회차 간 비교가 처음으로 안정적이 됨.
+    def is_holdout_row(r, frac=0.2):
+        key = f"{r['L_M_mm']}_{r['phi_deg']}_{r['beta_deg']}_{r['contact_s_mm']}"
+        h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+        return (h % 10000) < int(frac * 10000)
+
+    holdout_idx = [i for i, r in enumerate(all_rows) if is_holdout_row(r)]
+    fit_idx = [i for i, r in enumerate(all_rows) if not is_holdout_row(r)]
     real_holdout_rows = [all_rows[i] for i in holdout_idx]
     fit_rows = [all_rows[i] for i in fit_idx]
     print(f"대체모델 학습 데이터: {len(fit_rows)}개 (전체 {len(all_rows)}개 중 {len(real_holdout_rows)}개는 "

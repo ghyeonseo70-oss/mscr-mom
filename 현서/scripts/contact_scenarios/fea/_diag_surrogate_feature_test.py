@@ -3,6 +3,7 @@ K1(s<a1)/K_RIGID(a1<=s<a2)/K2(s>=a2) 경계(a1=L_M-4,a2=L_M+4)가 L_M에 따라 
 원래 피처(L_M, contact_s_mm 그대로)만으로는 MLP가 145개로 배우기 어려울 수 있다는 가설 -
 s_rel=contact_s_mm-L_M(부호있는 MOM 중심 기준 상대위치)을 추가해서 같은 홀드아웃(시드42)으로
 비교. 새 FEA를 전혀 안 쓰고 피처 엔지니어링만으로 되는지 보는 게 목적."""
+import hashlib
 import json
 import os
 
@@ -29,10 +30,16 @@ for r in json.load(open(os.path.join(FEA_DATA_DIR, "fea_lm_phi_pos_matv2_all.jso
     row["seg_code"] = -1.0 if row["contact_s_mm"] < row["a1_mm"] else (0.0 if row["contact_s_mm"] < row["a2_mm"] else 1.0)
     all_rows.append(row)
 
-rng_holdout = np.random.default_rng(42)
-perm = rng_holdout.permutation(len(all_rows))
-n_holdout = max(20, int(len(all_rows) * 0.2))
-holdout_idx, fit_idx = perm[:n_holdout], perm[n_holdout:]
+# 2026-08-25: train_segment_classifier_singleprobe_beta0180_4seg.py와 동일한 해시기반
+# 고정 홀드아웃 (데이터 개수가 바뀌어도 기존 행의 소속이 안 바뀜 - 상세 이유는 그 파일 참고)
+def is_holdout_row(r, frac=0.2):
+    key = f"{r['L_M_mm']}_{r['phi_deg']}_{r['beta_deg']}_{r['contact_s_mm']}"
+    h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+    return (h % 10000) < int(frac * 10000)
+
+
+holdout_idx = [i for i, r in enumerate(all_rows) if is_holdout_row(r)]
+fit_idx = [i for i, r in enumerate(all_rows) if not is_holdout_row(r)]
 holdout_rows = [all_rows[i] for i in holdout_idx]
 fit_rows = [all_rows[i] for i in fit_idx]
 print(f"fit={len(fit_rows)}, holdout={len(holdout_rows)}")

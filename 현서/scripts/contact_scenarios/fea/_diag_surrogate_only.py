@@ -1,6 +1,7 @@
 """서로게이트(대체모델)만 따로 떼서 36개 실측 홀드아웃에 테스트 - B-field/CNN 파이프라인을
 아예 안 거치고, "서로게이트가 145개로 학습해서 안 본 36개 FEA를 얼마나 잘 맞추는가"만 순수하게 봄.
 train_segment_classifier_singleprobe_beta0180_4seg.py와 완전히 동일한 홀드아웃 분리(시드 42)."""
+import hashlib
 import json
 import os
 
@@ -23,10 +24,16 @@ for r in json.load(open(os.path.join(FEA_DATA_DIR, "fea_lm_phi_pos_matv2_all.jso
     row.update(r)
     all_rows.append(row)
 
-rng_holdout = np.random.default_rng(42)
-perm = rng_holdout.permutation(len(all_rows))
-n_holdout = max(20, int(len(all_rows) * 0.2))
-holdout_idx, fit_idx = perm[:n_holdout], perm[n_holdout:]
+# 2026-08-25: train_segment_classifier_singleprobe_beta0180_4seg.py와 동일한 해시기반
+# 고정 홀드아웃 (데이터 개수가 바뀌어도 기존 행의 소속이 안 바뀜 - 상세 이유는 그 파일 참고)
+def is_holdout_row(r, frac=0.2):
+    key = f"{r['L_M_mm']}_{r['phi_deg']}_{r['beta_deg']}_{r['contact_s_mm']}"
+    h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+    return (h % 10000) < int(frac * 10000)
+
+
+holdout_idx = [i for i, r in enumerate(all_rows) if is_holdout_row(r)]
+fit_idx = [i for i, r in enumerate(all_rows) if not is_holdout_row(r)]
 holdout_rows = [all_rows[i] for i in holdout_idx]
 fit_rows = [all_rows[i] for i in fit_idx]
 print(f"fit={len(fit_rows)}, holdout={len(holdout_rows)}")

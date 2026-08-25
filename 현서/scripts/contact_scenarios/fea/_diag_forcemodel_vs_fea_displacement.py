@@ -3,6 +3,7 @@
 데이터 학습이 필요 없는 닫힌 물리모델이라 - 이게 실측과 잘 맞으면 서로게이트를 변위 예측에서
 아예 빼고 힘(Fx,Fy)만 예측하게 해서 문제의 근원을 없앨 수 있음. 36개 홀드아웃 전부에서
 실측 Fx,Fy를 그대로 force_model.solve_shape의 하중으로 넣어보고 변위를 비교."""
+import hashlib
 import json
 import os
 import sys
@@ -27,10 +28,15 @@ for r in json.load(open(os.path.join(FEA_DATA_DIR, "fea_lm_phi_pos_matv2_all.jso
     all_rows.append(row)
 
 # train_segment_classifier_singleprobe_beta0180_4seg.py와 동일한 홀드아웃(시드42) - 36개
-rng_holdout = np.random.default_rng(42)
-perm = rng_holdout.permutation(len(all_rows))
-n_holdout = max(20, int(len(all_rows) * 0.2))
-holdout_idx = perm[:n_holdout]
+# 2026-08-25: train_segment_classifier_singleprobe_beta0180_4seg.py와 동일한 해시기반
+# 고정 홀드아웃 (데이터 개수가 바뀌어도 기존 행의 소속이 안 바뀜 - 상세 이유는 그 파일 참고)
+def is_holdout_row(r, frac=0.2):
+    key = f"{r['L_M_mm']}_{r['phi_deg']}_{r['beta_deg']}_{r['contact_s_mm']}"
+    h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+    return (h % 10000) < int(frac * 10000)
+
+
+holdout_idx = [i for i, r in enumerate(all_rows) if is_holdout_row(r)]
 holdout_rows = [all_rows[i] for i in holdout_idx]
 
 real_ux, real_uy, real_theta = [], [], []
