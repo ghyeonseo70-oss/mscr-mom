@@ -325,6 +325,16 @@ if __name__ == "__main__":
     c_std[c_std < 1e-12] = 1.0
     c_norm = (c_all - c_mean) / c_std
 
+    # 2026-08-25 실험: |phi|>=90 구간은 토크제로 특이점 근방이라 힘이 작고 불안정해서
+    # 원래부터 예측이 어려움(실측 홀드아웃에서 이 구간만 R^2가 낮게 나옴, PROJECT_STATUS.md
+    # 참고). 새 FEA 없이도 힘 손실 가중치만 이 구간에 더 줘서 모델이 더 집중하게 하면
+    # 나아지는지 확인하는 실험(사용자 요청) - seg/s/config 손실은 그대로 둠(이미 잘 됨,
+    # 굳이 건드려서 흔들 필요 없음).
+    HIGH_PHI_WEIGHT = 3.0
+    phi_weight_all = np.where(np.abs(c_all[:, 1]) >= 90, HIGH_PHI_WEIGHT, 1.0).astype(np.float32)
+    print(f"|phi|>=90 힘 손실 가중치 {HIGH_PHI_WEIGHT}배 적용: "
+          f"{int((phi_weight_all > 1).sum())}/{len(phi_weight_all)}개 샘플")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"최종 분류기 학습 시작 (device={device})...")
 
@@ -350,7 +360,8 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         TensorDataset(torch.tensor(X_norm[train_idx]).float(), torch.tensor(y_all[train_idx]).long(),
                       torch.tensor(f_norm[train_idx]).float(), torch.tensor(s_norm[train_idx]).float(),
-                      torch.tensor(c_norm[train_idx]).float()),
+                      torch.tensor(c_norm[train_idx]).float(),
+                      torch.tensor(phi_weight_all[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
     val_y = torch.tensor(y_all[val_idx]).long().to(device)
@@ -360,6 +371,7 @@ if __name__ == "__main__":
     val_s_phys = s_all[val_idx]
     val_c = torch.tensor(c_norm[val_idx]).float().to(device)
     val_c_phys = c_all[val_idx]
+    val_phi_weight = torch.tensor(phi_weight_all[val_idx]).float().to(device)
 
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
@@ -377,8 +389,11 @@ if __name__ == "__main__":
     # 채로 고친 척하게 됨.
     FORCE_LOSS_WEIGHTS = torch.tensor([0.1, 1.0], device=device)  # [Fy_total_N(로컬,나쁨), Fx_total_N(로컬,좋음)]
 
-    def weighted_force_loss(pred, true):
-        return (((pred - true) ** 2) * FORCE_LOSS_WEIGHTS).mean()
+    def weighted_force_loss(pred, true, sample_weight=None):
+        per_sample = (((pred - true) ** 2) * FORCE_LOSS_WEIGHTS).mean(dim=1)
+        if sample_weight is not None:
+            per_sample = per_sample * sample_weight
+        return per_sample.mean()
 
     t_train = time.time()
     best_bal_acc = -1.0
@@ -386,11 +401,12 @@ if __name__ == "__main__":
     best_epoch = -1
     for epoch in range(N_EPOCHS):
         model.train()
-        for bx, by, bf, bs, bc in train_loader:
-            bx, by, bf, bs, bc = bx.to(device), by.to(device), bf.to(device), bs.to(device), bc.to(device)
+        for bx, by, bf, bs, bc, bw in train_loader:
+            bx, by, bf, bs, bc, bw = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
+                                       bc.to(device), bw.to(device))
             optimizer.zero_grad()
             seg_logits, force_pred, s_pred, config_pred = model(bx)
-            loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf)
+            loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
                     + s_criterion(s_pred, bs) + config_criterion(config_pred, bc))
             loss.backward()
             optimizer.step()
@@ -398,7 +414,7 @@ if __name__ == "__main__":
         with torch.no_grad():
             val_seg_logits, val_force_pred, val_s_pred, val_config_pred = model(val_X)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
-            val_force_loss = weighted_force_loss(val_force_pred, val_f).item()
+            val_force_loss = weighted_force_loss(val_force_pred, val_f, val_phi_weight).item()
             val_s_loss = s_criterion(val_s_pred, val_s).item()
             val_config_loss = config_criterion(val_config_pred, val_c).item()
             val_pred_epoch = val_seg_logits.argmax(dim=1)
