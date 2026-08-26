@@ -35,7 +35,14 @@ FORCE_MODEL_DIR = os.path.join(REPO_ROOT, "scripts", "force_model")
 
 FEATURES = ["L_M_mm", "phi_deg", "beta_deg", "contact_s_mm", "push_depth_mm"]
 TARGETS = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_uz_avg_mm", "tip_theta_deg_board",
-           "Fx_total_N", "Fy_total_N", "Fz_total_N", "F_mag_N"]
+           "Fx_total_N", "Fy_total_N", "Fz_total_N", "F_mag_N",
+           "mom_ux_avg_mm", "mom_uy_avg_mm", "mom_uz_avg_mm", "mom_theta_deg_board"]
+# 2026-08-26 추가: MOM(강체구간) 자체의 변위를 대체모델이 직접 예측하도록 타겟에 추가.
+# 예전엔 "MOM은 팁 변위의 L_M/100만큼만 움직인다"는 frac 근사를 썼는데, L_M=0(MOM이 베이스
+# 바로 옆)에서 frac~0이 되어 MOM 변위 신호가 거의 사라지는 바람에 L_M 실측 R^2가 0.565로
+# 낮게 나온 원인이 됨(_diag_lm_holdout_error.py로 확인) - 실측 FEA(mom_*_avg_mm)가 있는
+# 새 데이터부터는 이 값을 그대로 쓰고, 없는 옛 데이터는 하위호환을 위해 frac 근사로 대체.
+MOM_TARGETS_MISSING_OLD_DATA = ["mom_ux_avg_mm", "mom_uy_avg_mm", "mom_uz_avg_mm", "mom_theta_deg_board"]
 DEFAULTS = {"L_M_mm": 50.0, "phi_deg": 60.0, "beta_deg": 0.0}
 
 BIN_WIDTH_MM = 20.0
@@ -162,8 +169,11 @@ def worker(args):
         d_xL_local = pred["tip_uy_avg_mm"]
         d_yL_local = pred["tip_ux_avg_mm"]
         d_thL = -pred["tip_theta_deg_board"]
-        frac = L_M / 100.0
-        d_xLM_local, d_yLM_local, d_thLM = d_xL_local * frac, d_yL_local * frac, d_thL * frac
+        # 2026-08-26: frac(=L_M/100) 근사 폐기 - 서로게이트가 이제 MOM 자체 변위도 직접
+        # 예측하므로(TARGETS에 mom_* 추가) 그걸 그대로 씀(축교환 방식은 tip과 동일).
+        d_xLM_local = pred["mom_uy_avg_mm"]
+        d_yLM_local = pred["mom_ux_avg_mm"]
+        d_thLM = -pred["mom_theta_deg_board"]
 
         xL_free, yL_free, thL_free = r_free["x_L"], r_free["y_L"], r_free["theta_L_deg"]
         xLM_free, yLM_free, thLM_free = r_free["x_LM"], r_free["y_LM"], r_free["theta_LM_deg"]
@@ -223,6 +233,16 @@ if __name__ == "__main__":
         for r in json.load(open(path)):
             row = dict(DEFAULTS)
             row.update(r)
+            if "mom_ux_avg_mm" not in row:
+                # 2026-08-26 이전 FEA(MOM 절점 변위를 안 뽑던 시절)와의 하위호환용 - 그때 쓰던
+                # frac 근사("MOM은 팁 변위의 L_M/100만큼만 움직인다")를 그대로 재현. 새 FEA는
+                # 실측값을 그대로 쓰고, 이 근사는 옛 데이터에만 적용됨(row별로 다르게 처리하면
+                # 코드가 사방에 흩어지니 로드 시점에 한 번만 통일).
+                frac = row["L_M_mm"] / 100.0
+                row["mom_ux_avg_mm"] = row["tip_ux_avg_mm"] * frac
+                row["mom_uy_avg_mm"] = row["tip_uy_avg_mm"] * frac
+                row["mom_uz_avg_mm"] = row.get("tip_uz_avg_mm", 0.0) * frac
+                row["mom_theta_deg_board"] = row["tip_theta_deg_board"] * frac
             all_rows.append(row)
 
     # 2026-08-19 비판적 리뷰 반영 #2: 실측 FEA를 전부 대체모델 학습에 써버리면 최종 CNN을
@@ -532,8 +552,11 @@ if __name__ == "__main__":
             continue
         d_xL_local, d_yL_local = r["tip_uy_avg_mm"], r["tip_ux_avg_mm"]  # 축교환(worker()와 동일)
         d_thL = -r["tip_theta_deg_board"]
-        frac = L_M / 100.0
-        d_xLM_local, d_yLM_local, d_thLM = d_xL_local * frac, d_yL_local * frac, d_thL * frac
+        # 2026-08-26: frac 근사 폐기, all_rows 로딩 시점에 채워진 실측(또는 하위호환 근사)
+        # mom_* 값을 그대로 씀(worker()와 동일한 축교환 방식).
+        d_xLM_local = r["mom_uy_avg_mm"]
+        d_yLM_local = r["mom_ux_avg_mm"]
+        d_thLM = -r["mom_theta_deg_board"]
         xL_free, yL_free, thL_free = r_free["x_L"], r_free["y_L"], r_free["theta_L_deg"]
         xLM_free, yLM_free, thLM_free = r_free["x_LM"], r_free["y_LM"], r_free["theta_LM_deg"]
         B_free = compute_B_eval(xLM_free, yLM_free, thLM_free, xL_free, yL_free, thL_free)

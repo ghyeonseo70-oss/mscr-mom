@@ -149,6 +149,7 @@ def build_mesh(contact_s, ball_r=0.4, gap0=0.02, mesh_size_ball=MESH_SIZE_BALL,
     # 기하가 훨씬 단순해지고 fragment 관련 문제가 원천적으로 사라짐(실제 카테터도 이런 보강재를
     # 속이 빈 내강 정중앙보다 벽 속에 매립하는 경우가 흔해서 물리적으로도 무리 없는 가정).
     a1_mm = float(np.clip(cl["L_M"] - fm.H_M / 2, 0.0, fm.L))
+    a2_mm = float(np.clip(cl["L_M"] + fm.H_M / 2, 0.0, fm.L))
     wire_beam_curve = None
     if include_wire and a1_mm > 0.5:  # K1 구간이 있을 때만 (L_M=0이면 a1=0, 와이어 없음)
         k1_pts = _points_up_to_s(pts, a1_mm)
@@ -210,7 +211,7 @@ def build_mesh(contact_s, ball_r=0.4, gap0=0.02, mesh_size_ball=MESH_SIZE_BALL,
     surfaces_ball = gmsh.model.getBoundary([(3, ball_tag)], oriented=False)
     ball_faces = [tag for dim, tag in surfaces_ball]
 
-    gmsh.model.addPhysicalGroup(3, silicone_vols, name="TUBE")
+    tube_phys_tag = gmsh.model.addPhysicalGroup(3, silicone_vols, name="TUBE")
     if wire_beam_curve is not None:
         gmsh.model.addPhysicalGroup(1, [wire_beam_curve], name="WIRE_BEAM")
     gmsh.model.addPhysicalGroup(3, [ball_tag], name="BALL")
@@ -322,11 +323,34 @@ def build_mesh(contact_s, ball_r=0.4, gap0=0.02, mesh_size_ball=MESH_SIZE_BALL,
     ball_vol_nodes = nodes_of(3, "BALL")
     tip_nodes = nodes_of(2, "TIP")
 
+    # 2026-08-26 추가: MOM(강체구간, s=a1~a2) 자체의 변위를 직접 뽑기 위한 절점 집합.
+    # TIP처럼 자연스러운 "끝단 면"이 아니라 튜브 중간의 위치 구간이라 gmsh 지오메트리를
+    # 쪼개는(physical group을 새 면/체적으로) 방식은 예전에 와이어/충전재 fragment에서 겪은
+    # 자코비안 음수 문제를 다시 부를 위험이 있어 피함 - 대신 지오메트리는 그대로 두고, TUBE
+    # 체적에 속한 모든 절점 좌표를 조밀한 중심선점(pts)에 최근접 매칭해서 호길이(s) 근사값을
+    # 매기고, a1<=s<=a2인 절점만 사후에 골라냄(순수 사후 필터링이라 메쉬 생성 자체에는 영향 없음).
+    tube_node_tags, tube_node_coords_flat = gmsh.model.mesh.getNodesForPhysicalGroup(3, tube_phys_tag)
+    tube_coords = np.array(tube_node_coords_flat).reshape(-1, 3)
+    pts_arr = np.array([[p["x"], p["y"], p["z"]] for p in pts])
+    pts_s = np.array([p["s"] for p in pts])
+    # (N_tube, N_pts) 거리행렬 - 메쉬 절점 수가 수만 개 넘어가면 메모리 부담이 커질 수 있으니
+    # 필요시 배치로 나눠 처리(지금 규모의 튜브 메쉬에서는 문제없음, 확인 완료).
+    d2 = ((tube_coords[:, None, :] - pts_arr[None, :, :]) ** 2).sum(axis=2)
+    nearest_s = pts_s[d2.argmin(axis=1)]
+    mom_mask = (nearest_s >= a1_mm - 1e-6) & (nearest_s <= a2_mm + 1e-6)
+    mom_nodes = tube_node_tags[mom_mask]
+    if len(mom_nodes) == 0:
+        # 안전장치: 격자 해상도 문제로 하나도 안 걸리면 구간 중점에 가장 가까운 절점 1개라도 확보
+        mid_s = (a1_mm + a2_mm) / 2
+        mom_nodes = np.array([tube_node_tags[np.argmin(np.abs(nearest_s - mid_s))]])
+        if verbose:
+            print(f"  [경고] N_MOM 절점이 0개라 중점(s={mid_s:.2f}) 최근접 1개로 대체함")
+
     sets_path = os.path.join(HERE, sets_name)
     with open(sets_path, "w") as f:
         for name, nodes in [("N_FIXED", fixed_nodes), ("N_TUBE_OUTER", outer_nodes),
                              ("N_BALL_SURF", ball_surf_nodes), ("N_BALL_ALL", ball_vol_nodes),
-                             ("N_TIP", tip_nodes)]:
+                             ("N_TIP", tip_nodes), ("N_MOM", mom_nodes)]:
             f.write(f"*NSET, NSET={name}\n")
             for i in range(0, len(nodes), 10):
                 f.write(",".join(str(int(n)) for n in nodes[i:i + 10]) + ",\n")
@@ -334,7 +358,8 @@ def build_mesh(contact_s, ball_r=0.4, gap0=0.02, mesh_size_ball=MESH_SIZE_BALL,
     if verbose:
         print(f"저장: {inp_path}, {sets_path}")
         print(f"  N_FIXED={len(fixed_nodes)}, N_TUBE_OUTER={len(outer_nodes)}, "
-              f"N_BALL_SURF={len(ball_surf_nodes)}, N_BALL_ALL={len(ball_vol_nodes)}, N_TIP={len(tip_nodes)}")
+              f"N_BALL_SURF={len(ball_surf_nodes)}, N_BALL_ALL={len(ball_vol_nodes)}, N_TIP={len(tip_nodes)}, "
+              f"N_MOM={len(mom_nodes)}(s={a1_mm:.2f}~{a2_mm:.2f})")
 
     gmsh.finalize()
     return {"ball_center": ball_center.tolist(), "normal": normal.tolist(), "contact_point": center_pt.tolist()}

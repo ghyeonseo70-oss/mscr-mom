@@ -86,7 +86,7 @@ for n, contact_s in enumerate(S_LIST, 1):
         res = rc.run_case(
             PUSH_DEPTH, inp_name=inp_name, sets_name=sets_name, job_name=job_name,
             timeout=1800, verbose=False, push_dir=tuple(normal), n_threads=args.threads,
-            print_tip=True, stabilize=stabilize_arg,
+            print_tip=True, print_mom=True, stabilize=stabilize_arg,
         )
     except Exception as e:
         print(f"  [{tag}] 실패: {e}", flush=True)
@@ -117,6 +117,11 @@ for n, contact_s in enumerate(S_LIST, 1):
         "tip_uz_avg_mm": res["tip_uz_avg_mm"],
         "tip_theta_deg_board": res["tip_theta_deg"],
         "tip_rotation_rmse_mm": res["tip_rotation_rmse_mm"],
+        "mom_ux_avg_mm": res["mom_ux_avg_mm"],
+        "mom_uy_avg_mm": res["mom_uy_avg_mm"],
+        "mom_uz_avg_mm": res["mom_uz_avg_mm"],
+        "mom_theta_deg_board": res["mom_theta_deg"],
+        "mom_rotation_rmse_mm": res["mom_rotation_rmse_mm"],
         "wall_time_s": dt,
     }
     results.append(row)

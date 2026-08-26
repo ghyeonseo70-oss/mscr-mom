@@ -31,7 +31,7 @@ WIRE_R_MM = 0.05  # mm, make_bent_contact_scene.py의 WIRE_R와 반드시 같아
 
 def build_inp(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_sets.inp",
               job_name="contact_test", push_dir=(1.0, 0.0, 0.0), contact_stiffness=None,
-              print_tip=False, inc=100, initial_inc=0.01, min_inc=None, max_inc=None,
+              print_tip=False, print_mom=False, inc=100, initial_inc=0.01, min_inc=None, max_inc=None,
               stabilize=None):
     """push_dir: 접촉점에서 튜브 표면 바깥쪽을 향하는 법선(구가 원래 놓인 쪽) 방향.
     실제 변위는 이 방향의 반대(-push_dir)로 push_depth만큼 줘서 눌러 들어가게 함.
@@ -134,6 +134,7 @@ N_BALL_ALL, 3, 3, {dz:.6E}
 *NODE PRINT, NSET=N_BALL_ALL
 U, RF
 {"*NODE PRINT, NSET=N_TIP" + chr(10) + "U" if print_tip else "**"}
+{"*NODE PRINT, NSET=N_MOM" + chr(10) + "U" if print_mom else "**"}
 *NODE FILE
 U
 *EL FILE
@@ -189,7 +190,7 @@ def check_converged(job_name="contact_test", tol=1e-3):
     return last_total_time >= 1.0 - tol, last_total_time
 
 
-def parse_results(job_name="contact_test", n_ball_nodes=None, print_tip=False):
+def parse_results(job_name="contact_test", n_ball_nodes=None, print_tip=False, print_mom=False):
     """마지막 증분(time=1.0)의 접촉반력 총합과 평균 x변위를 반환.
     (블록 경계를 '다음 마커 등장 지점'으로 정확히 잘라서 이전의 혼입 버그를 고침)"""
     dat_path = os.path.join(HERE, f"{job_name}.dat")
@@ -243,6 +244,20 @@ def parse_results(job_name="contact_test", n_ball_nodes=None, print_tip=False):
         result["tip_uy_avg_mm"] = tuy_sum / n_tu if n_tu else float("nan")
         result["tip_uz_avg_mm"] = tuz_sum / n_tu if n_tu else float("nan")
         result["n_tip_nodes"] = n_tu
+
+    if print_mom:
+        # 2026-08-26 추가: N_MOM(MOM 강체구간 절점들)의 평균 변위 - 지금까지 "MOM은 팁 변위의
+        # L_M/100만큼만 움직인다"는 근사(frac 휴리스틱)로 대체하던 값을 실제 FEA로 직접 대체.
+        # L_M=0(MOM이 베이스 바로 옆) 근처에서 frac~0이 되어 MOM 변위 신호가 거의 사라지는
+        # 문제(L_M 실측 R^2=0.565로 확인된 원인)를 근본적으로 해결하려는 목적.
+        mom_chunk = last_block("displacements (vx,vy,vz) for set N_MOM and time")
+        mux_sum, n_mu = sum_col(mom_chunk, 1)
+        muy_sum, _ = sum_col(mom_chunk, 2)
+        muz_sum, _ = sum_col(mom_chunk, 3)
+        result["mom_ux_avg_mm"] = mux_sum / n_mu if n_mu else float("nan")
+        result["mom_uy_avg_mm"] = muy_sum / n_mu if n_mu else float("nan")
+        result["mom_uz_avg_mm"] = muz_sum / n_mu if n_mu else float("nan")
+        result["n_mom_nodes"] = n_mu
     return result
 
 
@@ -293,28 +308,32 @@ def _parse_node_coords(inp_path, node_ids):
     return coords
 
 
-def get_tip_rotation_deg(job_name, inp_name, sets_name):
-    """접촉 전(원래 절점좌표) vs 접촉 후(원좌표+변위)의 N_TIP(팁 캡) 절점들을 강체회전으로
-    피팅(Kabsch)해서, 팁 캡이 실제로 얼마나/어느 방향으로 회전했는지(deg) 추정.
+def get_rotation_deg(job_name, inp_name, sets_name, nset_name="N_TIP", key_prefix="tip"):
+    """접촉 전(원래 절점좌표) vs 접촉 후(원좌표+변위)의 nset_name 절점들을 강체회전으로
+    피팅(Kabsch)해서, 그 절점집합이 실제로 얼마나/어느 방향으로 회전했는지(deg) 추정.
     force_model.py의 theta(로컬 굽힘평면 xy 내 접선각) 정의와 비교 가능하도록,
     피팅된 3x3 회전행렬에서 z축 기준 평면내 회전성분만 뽑아 반환한다
     (굽힘이 z=일정 평면 내에서 일어난다는 가정 - board_z 고정, make_bent_contact_scene.py 참고).
-    """
+
+    2026-08-26: 원래 N_TIP 전용(get_tip_rotation_deg)이었는데, N_MOM(MOM 강체구간)의 실제
+    회전도 똑같이 필요해져서(더 이상 "MOM은 팁 변위의 L_M/100만큼만 회전한다"는 frac
+    근사를 안 쓰기 위해) nset_name/key_prefix를 인자로 뺌 - 로직은 완전히 동일."""
     dat_path = os.path.join(HERE, f"{job_name}.dat")
     sets_path = os.path.join(HERE, sets_name)
     inp_path = os.path.join(HERE, inp_name)
+    nan_result = {f"{key_prefix}_theta_deg": float("nan"), f"{key_prefix}_rotation_rmse_mm": float("nan")}
 
-    tip_ids = _parse_nset(sets_path, "N_TIP")
-    if not tip_ids:
-        return {"tip_theta_deg": float("nan"), "tip_rotation_rmse_mm": float("nan")}
-    orig = _parse_node_coords(inp_path, tip_ids)
+    ids = _parse_nset(sets_path, nset_name)
+    if not ids:
+        return nan_result
+    orig = _parse_node_coords(inp_path, ids)
 
     with open(dat_path, encoding="latin-1") as f:
         dat = f.read()
-    marker = "displacements (vx,vy,vz) for set N_TIP and time"
+    marker = f"displacements (vx,vy,vz) for set {nset_name} and time"
     idx = dat.rfind(marker)
     if idx == -1:
-        return {"tip_theta_deg": float("nan"), "tip_rotation_rmse_mm": float("nan")}
+        return nan_result
     chunk = dat[idx + len(marker):]
     for other in ["displacements (vx,vy,vz)", "forces (fx,fy,fz)"]:
         pos = chunk.find(other)
@@ -338,7 +357,7 @@ def get_tip_rotation_deg(job_name, inp_name, sets_name):
         Q.append((x0 + ux, y0 + uy, z0 + uz))
 
     if len(P) < 3:
-        return {"tip_theta_deg": float("nan"), "tip_rotation_rmse_mm": float("nan")}
+        return nan_result
 
     P = np.array(P)
     Q = np.array(Q)
@@ -354,17 +373,22 @@ def get_tip_rotation_deg(job_name, inp_name, sets_name):
     theta_deg = np.degrees(np.arctan2(R[1, 0], R[0, 0]))
     fit_resid = Qc.T - R @ Pc.T
     rmse = float(np.sqrt(np.mean(np.sum(fit_resid ** 2, axis=0))))
-    return {"tip_theta_deg": float(theta_deg), "tip_rotation_rmse_mm": rmse}
+    return {f"{key_prefix}_theta_deg": float(theta_deg), f"{key_prefix}_rotation_rmse_mm": rmse}
+
+
+def get_tip_rotation_deg(job_name, inp_name, sets_name):
+    """하위호환용 래퍼 - get_rotation_deg(..., nset_name="N_TIP", key_prefix="tip")와 동일."""
+    return get_rotation_deg(job_name, inp_name, sets_name, nset_name="N_TIP", key_prefix="tip")
 
 
 def run_case(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_sets.inp",
              job_name="contact_test", timeout=800, verbose=True, push_dir=(1.0, 0.0, 0.0),
-             print_tip=False, n_threads=CCX_THREADS, inc=100, initial_inc=0.01,
+             print_tip=False, print_mom=False, n_threads=CCX_THREADS, inc=100, initial_inc=0.01,
              min_inc=None, max_inc=None, stabilize=None):
     # 굽은 튜브 접촉해석에서 600초로 했다가 실제로는 100% 완료됐는데 그 직후 타임아웃에
     # 걸려서 결과를 놓칠 뻔한 적이 있어서(.sta로는 완료 확인, .dat도 무사히 써짐) 여유를 더 둠.
     build_inp(push_depth, inp_name, sets_name, job_name, push_dir=push_dir, print_tip=print_tip,
-              inc=inc, initial_inc=initial_inc, min_inc=min_inc, max_inc=max_inc,
+              print_mom=print_mom, inc=inc, initial_inc=initial_inc, min_inc=min_inc, max_inc=max_inc,
               stabilize=stabilize)
     if verbose:
         print(f"CalculiX 실행 중 (push_depth={push_depth}mm, push_dir={push_dir})...")
@@ -381,9 +405,11 @@ def run_case(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_se
             print(f"실패 - 수렴 안 됨 (TOTAL TIME={last_time:.4f} / 1.0에서 중단, 접촉이 너무 깊게 들어갔거나 "
                   f"해석이 발산했을 가능성)")
         return None
-    res = parse_results(job_name, print_tip=print_tip)
+    res = parse_results(job_name, print_tip=print_tip, print_mom=print_mom)
     if print_tip:
-        res.update(get_tip_rotation_deg(job_name, inp_name, sets_name))
+        res.update(get_rotation_deg(job_name, inp_name, sets_name, nset_name="N_TIP", key_prefix="tip"))
+    if print_mom:
+        res.update(get_rotation_deg(job_name, inp_name, sets_name, nset_name="N_MOM", key_prefix="mom"))
     if verbose:
         print(f"  -> F_mag={res['F_mag_N']*1000:.4f} mN (Fx={res['Fx_total_N']*1000:.4f}, "
               f"Fy={res['Fy_total_N']*1000:.4f}, Fz={res['Fz_total_N']*1000:.4f} mN), "
@@ -392,6 +418,10 @@ def run_case(push_depth, inp_name="contact_mesh.inp", sets_name="contact_node_se
             print(f"  -> TIP shift: ({res['tip_ux_avg_mm']:.5f}, {res['tip_uy_avg_mm']:.5f}, "
                   f"{res['tip_uz_avg_mm']:.5f}) mm, TIP rotation(board frame)={res['tip_theta_deg']:.3f}deg "
                   f"(fit rmse={res['tip_rotation_rmse_mm']:.5f}mm)")
+        if print_mom:
+            print(f"  -> MOM shift: ({res['mom_ux_avg_mm']:.5f}, {res['mom_uy_avg_mm']:.5f}, "
+                  f"{res['mom_uz_avg_mm']:.5f}) mm, MOM rotation(board frame)={res['mom_theta_deg']:.3f}deg "
+                  f"(fit rmse={res['mom_rotation_rmse_mm']:.5f}mm)")
     return res
 
 
