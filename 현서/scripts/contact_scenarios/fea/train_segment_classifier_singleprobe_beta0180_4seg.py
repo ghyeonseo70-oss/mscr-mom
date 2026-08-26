@@ -393,6 +393,15 @@ if __name__ == "__main__":
     val_c_phys = c_all[val_idx]
     val_phi_weight = torch.tensor(phi_weight_all[val_idx]).float().to(device)
 
+    # 2026-08-26 추가: 여기까지 최종 CNN(SingleProbeClassifier) 학습에는 시드 고정이 전혀
+    # 없었음(대체모델 앙상블만 seed=i로 고정돼있었음) - 가중치 초기화, DataLoader shuffle이
+    # 전부 매 실행마다 랜덤이라, 같은 코드/데이터로 재학습해도 holdout 지표가 그냥 시드
+    # 차이만으로 크게 흔들릴 수 있었음(예: mom_* 타겟 추가 후 Fy_board R^2가 0.857->0.648로
+    # "하락"한 게 실제 원인 때문인지 순수 시드 노이즈인지 구분이 안 됐던 문제 - 앞으로는
+    # 이 시드를 고정해서 회차 간 비교가 "같은 시드, 다른 코드"가 되게 함).
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
