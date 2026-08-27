@@ -162,9 +162,11 @@ print("\n=== phi 구간별 ===")
 report(~high_phi, "|phi|<90")
 report(high_phi, "|phi|>=90")
 
-print("\n=== s 구간별(BIN_WIDTH_MM 기준 구간과 동일) ===")
+print("\n=== s 구간별(BIN_WIDTH_MM 기준 구간과 동일, 마지막 구간은 min() clamp로 상한 없음) ===")
+s_max_actual = s_true.max()
 for c in range(N_CLASSES):
-    lo, hi = c * BIN_WIDTH_MM, (c + 1) * BIN_WIDTH_MM
+    lo = c * BIN_WIDTH_MM
+    hi = (c + 1) * BIN_WIDTH_MM if c < N_CLASSES - 1 else s_max_actual
     report(seg_class == c, f"s {lo:.0f}-{hi:.0f}mm (구간{c})")
 
 print("\n=== 구간 경계(±3mm) 근처 vs 안쪽 ===")
