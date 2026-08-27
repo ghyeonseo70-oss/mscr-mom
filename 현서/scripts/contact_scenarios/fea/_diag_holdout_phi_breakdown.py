@@ -93,11 +93,13 @@ class SingleProbeClassifier(nn.Module):
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
         self.config_head = nn.Linear(128, n_config)
+        self.lm_zero_head = nn.Linear(128, 1)  # 2026-08-27 추가 - state_dict 키 맞추기용
 
     def forward(self, x):
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds, dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h)
+        return (self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h),
+                self.lm_zero_head(h).squeeze(-1))
 
 
 cnn = SingleProbeClassifier()
@@ -153,7 +155,7 @@ real_X_norm = (real_X - X_mean2) / X_std2
 
 with torch.no_grad():
     rX = torch.tensor(real_X_norm[:, None]).float()
-    _, r_force_pred, _, _ = cnn(rX)
+    _, r_force_pred, _, _, _ = cnn(rX)
     r_force_phys = r_force_pred.numpy() * f_std + f_mean
 
 print(f"\nfree-shape 계산 성공: {len(real_X)}/{len(real_holdout_rows)}")

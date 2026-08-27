@@ -118,11 +118,13 @@ class SingleProbeClassifier(nn.Module):
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
         self.config_head = nn.Linear(128, n_config)
+        self.lm_zero_head = nn.Linear(128, 1)  # 2026-08-27 추가 - state_dict 키 맞추기용
 
     def forward(self, x):
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds, dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h)
+        return (self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h),
+                self.lm_zero_head(h).squeeze(-1))
 
 
 ckpt = torch.load(os.path.join(MODELS_DIR, "position_segment_classifier_singleprobe_beta0180_4seg.pth"),
@@ -156,7 +158,7 @@ def cnn_predict(img):
     xn = (img - X_mean2) / X_std2
     xt = torch.tensor(xn[None, None], dtype=torch.float32)
     with torch.no_grad():
-        seg_logits, force_pred, s_pred, _ = cnn(xt)
+        seg_logits, force_pred, s_pred, _, _ = cnn(xt)
     fx_fy = force_pred.numpy()[0] * f_std + f_mean
     return fx_fy  # [Fy_local, Fx_local] 순서 (fb와 동일)
 

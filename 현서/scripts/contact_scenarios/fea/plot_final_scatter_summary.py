@@ -1,9 +1,5 @@
-"""L_M 실측 홀드아웃 예측 오차를 L_M 개별 값별로 쪼개서 확인 - 2026-08-26 발견:
-전체 데이터 개수는 L_M값마다 비슷한데(60~75개), L_M=0mm만 유독 MAE가 크게(다른 값의
-4배 이상) 나쁨. 가운데(25~62.5mm)는 다 좋고 양쪽 끝(0, 87.5mm)으로 갈수록 나빠지는
-전형적 회귀모델의 "범위 경계 효과"인데, L_M=0은 그 경계효과를 훨씬 넘어서는 수준 -
-K1(베이스~MOM) 구간 길이가 정확히 0이 되는 구조적 특이점이기 때문으로 추정.
-재학습할 때마다 이 스크립트로 패턴이 재현되는지 확인할 것."""
+"""지금까지(2026-08-26 세션) 최신 체크포인트의 실측 홀드아웃(n=99, 해시기반 고정분할)
+예측 vs 실제 산점도 5개(구간분류용 s, phi, L_M, Fx_board, Fy_board) - 세션 결론 요약용."""
 import hashlib
 import json
 import os
@@ -12,6 +8,11 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
+
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FEA_DATA_DIR = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios", "fea")
@@ -40,6 +41,7 @@ for r in json.load(open(os.path.join(FEA_DATA_DIR, "fea_lm_phi_pos_matv2_all.jso
     row.update(r)
     all_rows.append(row)
 real_holdout_rows = [r for r in all_rows if is_holdout_row(r)]
+print(f"실측 홀드아웃: n={len(real_holdout_rows)}")
 
 ckpt = torch.load(os.path.join(MODELS_DIR, "position_segment_classifier_singleprobe_beta0180_4seg.pth"),
                    map_location="cpu", weights_only=False)
@@ -71,7 +73,10 @@ cnn = SingleProbeClassifier()
 cnn.load_state_dict(ckpt["state_dict"])
 cnn.eval()
 X_mean2, X_std2 = ckpt["X_mean"], ckpt["X_std"]
+f_mean, f_std = ckpt["f_mean"], ckpt["f_std"]
+s_mean, s_std = ckpt["s_mean"], ckpt["s_std"]
 c_mean, c_std = ckpt["c_mean"], ckpt["c_std"]
+force_names = ckpt["force_names"]
 config_names = ckpt["config_names"]
 
 SENSOR_HEIGHT_MM = 15
@@ -92,7 +97,7 @@ def compute_B(xLM_l, yLM_l, thLM, xL_l, yL_l, thL):
     return magpy.getB(mscr_robot, sensors) * 1e6
 
 
-real_X, real_c = [], []
+real_X, real_s, real_fx_board, real_fy_board, real_c = [], [], [], [], []
 for r in real_holdout_rows:
     L_M, phi = r["L_M_mm"], r["phi_deg"]
     try:
@@ -112,33 +117,62 @@ for r in real_holdout_rows:
     B_load = compute_B(xLM_free + d_xLM_local, yLM_free + d_yLM_local, thLM_free + d_thLM,
                         xL_free + d_xL_local, yL_free + d_yL_local, thL_free + d_thL)
     real_X.append((B_load - B_free).reshape(5, 5, 3).transpose(2, 0, 1))
+    real_s.append(r["contact_s_mm"])
+    real_fx_board.append(r["Fy_total_N"])  # Fx_board 정답
+    real_fy_board.append(r["Fx_total_N"])  # Fy_board 정답
     real_c.append([L_M, phi])
 
 real_X = np.array(real_X, dtype=np.float32)
-real_c_arr = np.array(real_c, dtype=np.float32)
 real_X_norm = (real_X - X_mean2) / X_std2
+real_s = np.array(real_s)
+real_fx_board = np.array(real_fx_board)
+real_fy_board = np.array(real_fy_board)
+real_c = np.array(real_c, dtype=np.float32)
+
 with torch.no_grad():
     rX = torch.tensor(real_X_norm[:, None]).float()
-    _, _, _, r_config_pred, r_lm_zero_logit = cnn(rX)
-    r_config_phys = r_config_pred.numpy() * c_std + c_mean
-    r_lm_zero_pred = (r_lm_zero_logit.numpy() > 0)
+    _, r_force_pred, r_s_pred, r_config_pred, _ = cnn(rX)
+    force_phys = r_force_pred.numpy() * f_std + f_mean
+    s_phys = r_s_pred.numpy() * s_std + s_mean
+    config_phys = r_config_pred.numpy() * c_std + c_mean
 
-lm_idx = config_names.index("L_M_mm")
-lm_pred = r_config_phys[:, lm_idx]
-lm_true = real_c_arr[:, lm_idx]
+fx_board_pred = force_phys[:, force_names.index("Fx_board_N")]
+fy_board_pred = force_phys[:, force_names.index("Fy_board_N")]
+lm_pred = config_phys[:, config_names.index("L_M_mm")]
+phi_pred = config_phys[:, config_names.index("phi_deg")]
+lm_true = real_c[:, 0]
+phi_true = real_c[:, 1]
 
-print(f"{'L_M':>6} {'n':>3} {'MAE':>8}   예측범위")
-for lm_val in sorted(set(lm_true)):
-    mask = lm_true == lm_val
-    n = mask.sum()
-    mae = np.abs(lm_pred[mask] - lm_true[mask]).mean()
-    print(f"{lm_val:6.1f} {n:3d} {mae:8.2f}   [{lm_pred[mask].min():.1f}, {lm_pred[mask].max():.1f}]")
+panels = [
+    ("s (접촉위치, mm)", real_s, s_phys, "#2451A3"),
+    ("phi (형상각도, deg)", phi_true, phi_pred, "#27AE60"),
+    ("L_M (자석위치, mm)", lm_true, lm_pred, "#C0392B"),
+    ("Fx_board (mN)", real_fx_board * 1000, fx_board_pred * 1000, "#8E44AD"),
+    ("Fy_board (mN)", real_fy_board * 1000, fy_board_pred * 1000, "#D68910"),
+]
 
-# 2026-08-27 추가: lm_zero_head(L_M<임계값 분류) 성능 + 하이브리드(분류+회귀) L_M
-LM_ZERO_THRESHOLD_MM = ckpt.get("lm_zero_threshold_mm", 6.25)
-true_zero = lm_true < LM_ZERO_THRESHOLD_MM
-zero_acc = (r_lm_zero_pred == true_zero).mean()
-hybrid = np.where(r_lm_zero_pred, 0.0, lm_pred)
-mae_h = np.abs(hybrid - lm_true).mean()
-print(f"\nlm_zero_head 분류 정확도={zero_acc*100:.1f}% (임계값 {LM_ZERO_THRESHOLD_MM}mm)")
-print(f"하이브리드(분류+회귀) L_M 전체 MAE={mae_h:.2f}mm (순수 회귀 위 표 대비 개선 여부 확인)")
+fig, axes = plt.subplots(1, 5, figsize=(24, 5))
+for ax, (name, true_v, pred_v, color) in zip(axes, panels):
+    r2 = r2_score(true_v, pred_v)
+    lo, hi = min(true_v.min(), pred_v.min()), max(true_v.max(), pred_v.max())
+    pad = (hi - lo) * 0.05
+    ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "r--", linewidth=1.2, label="y=x(완벽예측)")
+    # L_M=0 케이스는 별도 색으로 강조(현재 알려진 문제 구간)
+    if name.startswith("L_M"):
+        is_zero = np.abs(true_v) < 0.01
+        ax.scatter(true_v[~is_zero], pred_v[~is_zero], s=45, alpha=0.7, color=color, edgecolor="black", linewidth=0.3)
+        ax.scatter(true_v[is_zero], pred_v[is_zero], s=55, alpha=0.85, color="black", marker="x", label="L_M=0(문제구간)")
+    else:
+        ax.scatter(true_v, pred_v, s=45, alpha=0.7, color=color, edgecolor="black", linewidth=0.3)
+    ax.set_xlabel(f"실제 {name}")
+    ax.set_ylabel(f"예측 {name}")
+    ax.set_title(f"{name}\nR²={r2:.3f} (n={len(true_v)})", fontweight="bold", fontsize=12)
+    ax.legend(fontsize=8, loc="upper left")
+    ax.grid(True, linestyle=":", alpha=0.4)
+
+fig.suptitle("2026-08-26 세션 결론: 순수 실측 FEA 홀드아웃(n=99) 예측 vs 실제",
+             fontweight="bold", fontsize=15, y=1.03)
+plt.tight_layout()
+out_path = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios", "final_scatter_summary_0826.png")
+plt.savefig(out_path, dpi=140, bbox_inches="tight")
+print("저장:", out_path)

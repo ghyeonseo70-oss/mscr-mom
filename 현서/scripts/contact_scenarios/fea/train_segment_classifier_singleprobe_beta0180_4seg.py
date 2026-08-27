@@ -43,6 +43,16 @@ TARGETS = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_uz_avg_mm", "tip_theta_deg_boa
 # 낮게 나온 원인이 됨(_diag_lm_holdout_error.py로 확인) - 실측 FEA(mom_*_avg_mm)가 있는
 # 새 데이터부터는 이 값을 그대로 쓰고, 없는 옛 데이터는 하위호환을 위해 frac 근사로 대체.
 MOM_TARGETS_MISSING_OLD_DATA = ["mom_ux_avg_mm", "mom_uy_avg_mm", "mom_uz_avg_mm", "mom_theta_deg_board"]
+
+# 2026-08-27 추가: L_M=0 근처는 "0인지 아닌지 분류"는 99.3% 정확도로 완벽한데(
+# _diag_lm_multivariate_identifiability.py) "정확히 몇 mm인지 연속 회귀"만 실패하는 게
+# 확인됨(L_M=0 MAE=26~32mm, L_M!=0은 R^2=0.93+로 훌륭) - 신호의 L_M 민감도(기울기)가
+# L_M=0 근처에서 극단적으로 작아서(L_M=0->2.5mm 신호변화가 L_M=40->60mm의 1/20 수준)
+# 회귀만 정밀하게 못 맞추는 것으로 추정. 그래서 config_head(연속 회귀) 하나로 다 처리하는
+# 대신, "L_M<THRESHOLD인가"를 분류로 먼저 걸러내는 lm_zero_head를 추가 - 실측 격자점이
+# 0, 12.5, 25...mm(12.5mm 간격)라 그 중간값(6.25mm)을 경계로 씀. 이 경계 미만은
+# 회귀값을 안 믿고 대표값(0mm)으로 보고, 그 이상만 기존 config_head 회귀를 그대로 신뢰.
+LM_ZERO_THRESHOLD_MM = 6.25
 DEFAULTS = {"L_M_mm": 50.0, "phi_deg": 60.0, "beta_deg": 0.0}
 
 BIN_WIDTH_MM = 20.0
@@ -193,7 +203,8 @@ def worker(args):
 
 class SingleProbeClassifier(nn.Module):
     """구간분류(4-class) + 힘(Fx,Fy 보드좌표계) + 연속값 s(보조회귀) + L_M,phi(액추에이터
-    슬랙 보정용) 동시 예측 - 프로브 1개, beta는 0도/180도로 한정."""
+    슬랙 보정용) + L_M≈0 이진분류(2026-08-27 추가, 아래 lm_zero_head 참고) 동시 예측 -
+    프로브 1개, beta는 0도/180도로 한정."""
     def __init__(self, n_probes=N_PROBES, n_classes=N_CLASSES, n_force=2, n_config=2):
         super().__init__()
         self.n_probes = n_probes
@@ -209,11 +220,17 @@ class SingleProbeClassifier(nn.Module):
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
         self.config_head = nn.Linear(128, n_config)
+        # 2026-08-27 추가: L_M을 연속 회귀 하나로만 처리하면 L_M=0 근처에서 정밀도가
+        # 무너지는 게 확인됨(_diag_lm_multivariate_identifiability.py) - "L_M<임계값인가"만
+        # 따로 분류하는 작은 헤드를 추가. 이 분류 자체는 99.3% 정확도로 검증된 쉬운
+        # 문제라 1개 선형층으로 충분.
+        self.lm_zero_head = nn.Linear(128, 1)
 
     def forward(self, x):
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds, dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h)
+        return (self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h),
+                self.lm_zero_head(h).squeeze(-1))
 
 
 if __name__ == "__main__":
@@ -326,6 +343,9 @@ if __name__ == "__main__":
     s_all = np.concatenate([r[3] for r in results], axis=0)
     c_all = np.concatenate([r[4] for r in results], axis=0)
     n_rejected_total = sum(r[5] for r in results)
+    # 2026-08-27 추가: lm_zero_head용 이진 라벨 - L_M(c_all[:,0])만으로 결정되는 단순
+    # 함수라 worker()를 안 건드리고 여기서 한 번에 계산.
+    lm_zero_all = (np.abs(c_all[:, 0]) < LM_ZERO_THRESHOLD_MM).astype(np.float32)
     print(f"합성 데이터 생성 완료: {len(y_all)}개 ({time.time()-t_gen:.0f}s), "
           f"서로게이트 불일치로 거른 샘플: {n_rejected_total}개")
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
@@ -381,7 +401,8 @@ if __name__ == "__main__":
         TensorDataset(torch.tensor(X_norm[train_idx]).float(), torch.tensor(y_all[train_idx]).long(),
                       torch.tensor(f_norm[train_idx]).float(), torch.tensor(s_norm[train_idx]).float(),
                       torch.tensor(c_norm[train_idx]).float(),
-                      torch.tensor(phi_weight_all[train_idx]).float()),
+                      torch.tensor(phi_weight_all[train_idx]).float(),
+                      torch.tensor(lm_zero_all[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
     val_y = torch.tensor(y_all[val_idx]).long().to(device)
@@ -392,6 +413,7 @@ if __name__ == "__main__":
     val_c = torch.tensor(c_norm[val_idx]).float().to(device)
     val_c_phys = c_all[val_idx]
     val_phi_weight = torch.tensor(phi_weight_all[val_idx]).float().to(device)
+    val_lm_zero = torch.tensor(lm_zero_all[val_idx]).float().to(device)
 
     # 2026-08-26 추가: 여기까지 최종 CNN(SingleProbeClassifier) 학습에는 시드 고정이 전혀
     # 없었음(대체모델 앙상블만 seed=i로 고정돼있었음) - 가중치 초기화, DataLoader shuffle이
@@ -407,6 +429,7 @@ if __name__ == "__main__":
     seg_criterion = nn.CrossEntropyLoss()
     s_criterion = nn.MSELoss()
     config_criterion = nn.MSELoss()
+    lm_zero_criterion = nn.BCEWithLogitsLoss()
     # 2026-08-19 비판적 리뷰 #1: 대체모델 5-fold R^2가 Fy_total_N=-0.01(사실상 노이즈, 평균보다도
     # 못 맞춤)이라 이걸 "정답"으로 그대로 학습시키면 CNN이 서로게이트의 노이즈를 따라 배움.
     # 완전히 빼는 대신(F_mag=sqrt(Fx^2+Fy^2) 유도 로직이 Fx,Fy 둘 다 필요해서 구조를 안 바꿔도
@@ -430,22 +453,24 @@ if __name__ == "__main__":
     best_epoch = -1
     for epoch in range(N_EPOCHS):
         model.train()
-        for bx, by, bf, bs, bc, bw in train_loader:
-            bx, by, bf, bs, bc, bw = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                                       bc.to(device), bw.to(device))
+        for bx, by, bf, bs, bc, bw, blz in train_loader:
+            bx, by, bf, bs, bc, bw, blz = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
+                                            bc.to(device), bw.to(device), blz.to(device))
             optimizer.zero_grad()
-            seg_logits, force_pred, s_pred, config_pred = model(bx)
+            seg_logits, force_pred, s_pred, config_pred, lm_zero_logit = model(bx)
             loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                    + s_criterion(s_pred, bs) + config_criterion(config_pred, bc))
+                    + s_criterion(s_pred, bs) + config_criterion(config_pred, bc)
+                    + lm_zero_criterion(lm_zero_logit, blz))
             loss.backward()
             optimizer.step()
         model.eval()
         with torch.no_grad():
-            val_seg_logits, val_force_pred, val_s_pred, val_config_pred = model(val_X)
+            val_seg_logits, val_force_pred, val_s_pred, val_config_pred, val_lm_zero_logit = model(val_X)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
             val_force_loss = weighted_force_loss(val_force_pred, val_f, val_phi_weight).item()
             val_s_loss = s_criterion(val_s_pred, val_s).item()
             val_config_loss = config_criterion(val_config_pred, val_c).item()
+            val_lm_zero_acc = (((val_lm_zero_logit > 0).float() == val_lm_zero).float().mean().item())
             val_pred_epoch = val_seg_logits.argmax(dim=1)
             val_acc = (val_pred_epoch == val_y).float().mean().item()
             # 2026-08-19 비판적 리뷰 #4: 체크포인트를 "4개 손실 단순합" 대신 실제 목표인
@@ -462,17 +487,18 @@ if __name__ == "__main__":
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             best_epoch = epoch + 1
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ConfigLoss {val_config_loss:.4f}")
+            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ConfigLoss {val_config_loss:.4f}  LMZeroAcc {val_lm_zero_acc*100:5.1f}%")
     print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (balanced accuracy 기준, {best_bal_acc*100:.1f}%)")
 
     model.load_state_dict(best_state)
     model.eval()
     with torch.no_grad():
-        val_seg_logits, val_force_pred, val_s_pred, val_config_pred = model(val_X)
+        val_seg_logits, val_force_pred, val_s_pred, val_config_pred, val_lm_zero_logit = model(val_X)
         val_pred = val_seg_logits.argmax(dim=1)
         val_force_pred_phys = val_force_pred.cpu().numpy() * f_std + f_mean
         val_s_pred_phys = val_s_pred.cpu().numpy() * s_std + s_mean
         val_config_pred_phys = val_config_pred.cpu().numpy() * c_std + c_mean
+        val_lm_zero_pred = (val_lm_zero_logit.cpu().numpy() > 0)
     final_acc = (val_pred == val_y).float().mean().item()
     conf = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
     for t, p in zip(val_y.tolist(), val_pred.tolist()):
@@ -521,6 +547,22 @@ if __name__ == "__main__":
         mae = np.mean(np.abs(pred_i - true_i))
         unit = "mm" if name == "L_M_mm" else "deg"
         print(f"  {name}: R^2={r2:.3f}, MAE={mae:.2f}{unit}")
+
+    # 2026-08-27 추가: lm_zero_head(L_M<임계값 이진분류) 성능 + "분류 후 회귀"로 L_M을
+    # 재구성했을 때(하이브리드) 순수 회귀보다 나은지 비교. 하이브리드 값 = 분류가 "0에
+    # 가깝다"고 하면 대표값 0mm, 아니면 기존 config_head 회귀값 그대로.
+    def hybrid_lm_report(lm_zero_pred_arr, lm_pred_arr, lm_true_arr, label):
+        true_zero = lm_true_arr < LM_ZERO_THRESHOLD_MM
+        zero_acc = (lm_zero_pred_arr == true_zero).mean()
+        hybrid = np.where(lm_zero_pred_arr, 0.0, lm_pred_arr)
+        ss_res_h = np.sum((hybrid - lm_true_arr) ** 2)
+        ss_tot_h = np.sum((lm_true_arr - lm_true_arr.mean()) ** 2)
+        r2_h = 1 - ss_res_h / ss_tot_h if ss_tot_h > 0 else float("nan")
+        mae_h = np.mean(np.abs(hybrid - lm_true_arr))
+        print(f"  [{label}] lm_zero_head 분류 정확도={zero_acc*100:.1f}% (임계값 {LM_ZERO_THRESHOLD_MM}mm) | "
+              f"하이브리드(분류+회귀) L_M: R^2={r2_h:.3f}, MAE={mae_h:.2f}mm (순수 회귀 위 수치와 비교할 것)")
+
+    hybrid_lm_report(val_lm_zero_pred, val_config_pred_phys[:, 0], val_c_phys[:, 0], "합성-val")
 
     # 2026-08-19 비판적 리뷰 반영 #2: 지금까지의 val_* 지표는 전부 대체모델이 만든 합성데이터
     # 안에서만 도는 순환검증(같은 서로게이트의 가정을 재확인하는 것)이라, 대체모델 학습에서
@@ -590,11 +632,12 @@ if __name__ == "__main__":
         model.eval()
         with torch.no_grad():
             rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5) - probe 차원 추가
-            r_seg_logits, r_force_pred, r_s_pred, r_config_pred = model(rX)
+            r_seg_logits, r_force_pred, r_s_pred, r_config_pred, r_lm_zero_logit = model(rX)
             r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
             r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
             r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
             r_config_phys = r_config_pred.cpu().numpy() * c_std + c_mean
+            r_lm_zero_pred = (r_lm_zero_logit.cpu().numpy() > 0)
 
         real_acc = float((r_pred_class == real_y_arr).mean())
         conf_r = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
@@ -627,12 +670,17 @@ if __name__ == "__main__":
             print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.2f}{unit} "
                   f"(합성-val 기준 R^2={r2_score(val_c_phys[:, i], val_config_pred_phys[:, i]):.3f}와 비교할 것)")
 
+        # 2026-08-27 추가: 실측 홀드아웃에서도 하이브리드(분류+회귀) L_M이 순수 회귀보다
+        # 나은지 확인 - 이게 진짜 판단 기준(합성-val은 순환검증이라 참고용일 뿐).
+        hybrid_lm_report(r_lm_zero_pred, r_config_phys[:, 0], real_c_arr[:, 0], "실측 홀드아웃")
+
     os.makedirs(MODELS_DIR, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "X_mean": X_mean2, "X_std": X_std2,
                 "f_mean": f_mean, "f_std": f_std, "s_mean": s_mean, "s_std": s_std,
                 "c_mean": c_mean, "c_std": c_std,
                 "bin_width_mm": BIN_WIDTH_MM, "n_classes": N_CLASSES, "phi_range": PHI_RANGE,
-                "beta_values": BETA_VALUES, "force_names": force_names, "config_names": config_names},
+                "beta_values": BETA_VALUES, "force_names": force_names, "config_names": config_names,
+                "lm_zero_threshold_mm": LM_ZERO_THRESHOLD_MM},
                os.path.join(MODELS_DIR, "position_segment_classifier_singleprobe_beta0180_4seg.pth"))
     print(f"\n저장: {MODELS_DIR}/position_segment_classifier_singleprobe_beta0180_4seg.pth")
     print(f"\n총 소요시간: {(time.time()-t_start)/60:.1f}분")
