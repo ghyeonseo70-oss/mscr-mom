@@ -421,9 +421,10 @@ if __name__ == "__main__":
     # 차이만으로 크게 흔들릴 수 있었음(예: mom_* 타겟 추가 후 Fy_board R^2가 0.857->0.648로
     # "하락"한 게 실제 원인 때문인지 순수 시드 노이즈인지 구분이 안 됐던 문제 - 앞으로는
     # 이 시드를 고정해서 회차 간 비교가 "같은 시드, 다른 코드"가 되게 함).
-    torch.manual_seed(42)
+    FINAL_SEED = int(os.environ.get("FINAL_SEED", 42))
+    torch.manual_seed(FINAL_SEED)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(42)
+        torch.cuda.manual_seed_all(FINAL_SEED)
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
