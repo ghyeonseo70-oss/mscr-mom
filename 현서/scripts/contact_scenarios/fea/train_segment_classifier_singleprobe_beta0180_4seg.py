@@ -370,7 +370,12 @@ if __name__ == "__main__":
     # 참고). 새 FEA 없이도 힘 손실 가중치만 이 구간에 더 줘서 모델이 더 집중하게 하면
     # 나아지는지 확인하는 실험(사용자 요청) - seg/s/config 손실은 그대로 둠(이미 잘 됨,
     # 굳이 건드려서 흔들 필요 없음).
-    HIGH_PHI_WEIGHT = 3.0
+    # 2026-08-27 재튜닝: 3.0으로는 balanced acc/Fy_board는 좋아졌지만 정작 목표였던
+    # |phi|>=90 구간 Fx_board R^2=0.343으로 여전히 약했음(가중치가 너무 세서 그 구간
+    # 노이즈에 과적합했을 가능성) - 1.5로 낮춰서 재시도. 이번에도 그 구간 Fx_board가
+    # 안 좋아지면 이 레버 자체를 폐기하고 실측 FEA 추가 쪽으로 넘어갈 것(PROJECT_STATUS.md
+    # 18번 참고).
+    HIGH_PHI_WEIGHT = 1.5
     phi_weight_all = np.where(np.abs(c_all[:, 1]) >= 90, HIGH_PHI_WEIGHT, 1.0).astype(np.float32)
     print(f"|phi|>=90 힘 손실 가중치 {HIGH_PHI_WEIGHT}배 적용: "
           f"{int((phi_weight_all > 1).sum())}/{len(phi_weight_all)}개 샘플")
