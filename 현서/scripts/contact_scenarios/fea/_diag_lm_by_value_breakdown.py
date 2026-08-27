@@ -142,3 +142,11 @@ hybrid = np.where(r_lm_zero_pred, 0.0, lm_pred)
 mae_h = np.abs(hybrid - lm_true).mean()
 print(f"\nlm_zero_head 분류 정확도={zero_acc*100:.1f}% (임계값 {LM_ZERO_THRESHOLD_MM}mm)")
 print(f"하이브리드(분류+회귀) L_M 전체 MAE={mae_h:.2f}mm (순수 회귀 위 표 대비 개선 여부 확인)")
+
+print(f"\n{'L_M':>6} {'n':>3} {'회귀MAE':>8} {'하이브리드MAE':>12}   (L_M별 세분화)")
+for lm_val in sorted(set(lm_true)):
+    mask = lm_true == lm_val
+    n = mask.sum()
+    mae_reg = np.abs(lm_pred[mask] - lm_true[mask]).mean()
+    mae_hyb = np.abs(hybrid[mask] - lm_true[mask]).mean()
+    print(f"{lm_val:6.1f} {n:3d} {mae_reg:8.2f} {mae_hyb:12.2f}")
