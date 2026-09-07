@@ -1,0 +1,20 @@
+데이터 로드: 150000개
+
+=== 검증 1: 분류 head vs 연속값 이진화 (기존 학습된 CNN 모델 사용) ===
+  분류 head:      acc=71.4%  balanced=71.3%
+  연속값 이진화:   acc=66.5%  balanced=66.1%
+
+=== 검증 2: CNN vs 순수 MLP (같은 15만개 데이터로 재학습, 60 epoch) ===
+  [MLP] epoch 10/60 val_loss=1.2957
+  [MLP] epoch 20/60 val_loss=1.1693
+  [MLP] epoch 30/60 val_loss=1.0728
+  [MLP] epoch 40/60 val_loss=1.0544
+  [MLP] epoch 50/60 val_loss=1.0343
+  [MLP] epoch 60/60 val_loss=1.0023
+[MLP] 학습시간 110s
+[MLP] seg acc=72.8%  balanced=72.8%
+[MLP] s: R2=0.762 MAE=7.33mm
+[MLP] Fx: R2=0.946  Fy: R2=0.944
+[MLP] L_M: R2=0.940  phi: R2=0.956
+
+[참고: CNN 원본 결과] seg balanced=71.3%  s R2=0.760  Fx R2=0.953  Fy R2=0.953  L_M R2=0.969  phi R2=0.972

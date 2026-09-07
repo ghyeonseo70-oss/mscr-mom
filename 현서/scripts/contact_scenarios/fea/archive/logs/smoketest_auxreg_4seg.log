@@ -1,0 +1,342 @@
+대체모델 학습 데이터: 608개 (fea_lm_phi_pos_sweep_all.json, fea_bent_contact_sweep.json, fea_geom_sweep_all.json, fea_angle_sweep_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용, 타깃별) ===
+  tip_ux_avg_mm: R^2=0.956
+  tip_uy_avg_mm: R^2=0.978
+  tip_uz_avg_mm: R^2=0.856
+  tip_theta_deg_board: R^2=0.965
+  Fx_total_N: R^2=0.959
+  Fy_total_N: R^2=0.658
+  Fz_total_N: R^2=0.815
+  F_mag_N: R^2=0.982
+  (참고 RMSE, mm/deg/N 단위): tip_ux_avg_mm=0.0630, tip_uy_avg_mm=0.0239, tip_uz_avg_mm=0.0462, tip_theta_deg_board=0.0392
+대체모델 학습 완료 (111s)
+15만개 멀티프로브(11개 phi=[-150.0, -120.0, -90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0, 120.0, 150.0]) 합성 데이터 생성 시작 (16-way 병렬)...
+Process SpawnPoolWorker-7:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-12:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-4:
+Process SpawnPoolWorker-8:
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-6:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-3:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-1:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-2:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-16:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-14:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-10:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-15:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-11:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-13:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-5:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Process SpawnPoolWorker-9:
+Traceback (most recent call last):
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 320, in _bootstrap
+    self.run()
+    ~~~~~~~~^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\pool.py", line 114, in worker
+    task = get()
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\queues.py", line 387, in get
+    return _ForkingPickler.loads(res)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+AttributeError: module '__mp_main__' has no attribute 'worker'
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=8644)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=6768)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=5656)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=9228)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+PermissionError: [WinError 5] 액세스가 거부되었습니다
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 5] 액세스가 거부되었습니다
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 5] 액세스가 거부되었습니다
+PermissionError: [WinError 5] 액세스가 거부되었습니다
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=7480)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 5] 액세스가 거부되었습니다
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=9544)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 5] 액세스가 거부되었습니다
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=5356, pipe_handle=1112)
+                                                  ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\spawn.py", line 113, in spawn_main
+    new_handle = reduction.duplicate(pipe_handle,
+                                     source_process=source_process)
+  File "C:\Users\gustj\AppData\Roaming\uv\python\cpython-3.14-windows-x86_64-none\Lib\multiprocessing\reduction.py", line 79, in duplicate
+    return _winapi.DuplicateHandle(
+           ~~~~~~~~~~~~~~~~~~~~~~~^
+        source_process, handle, target_process,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        0, inheritable, _winapi.DUPLICATE_SAME_ACCESS)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [WinError 5] 액세스가 거부되었습니다

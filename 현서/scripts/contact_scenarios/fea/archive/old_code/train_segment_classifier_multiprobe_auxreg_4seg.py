@@ -1,16 +1,9 @@
 """
-단일 자기장 스냅샷으로는 구간분류가 무작위 수준(21.9%, balanced 20.5%)이었음
-(train_segment_classifier_150k.py 결과) -> 능동탐색(active sensing) 시도.
-
-핵심 아이디어(test_active_sensing.py에서 이미 검증됨): 같은 물리적 접촉(로컬 좌표 s, 힘 고정)
-이라도 로봇 구동상태(L_M,phi)에 따라 "구별 가능/불가능"이 달라짐 -> 접촉이 유지되는 동안
-phi(외부자기장 방향, 전기적으로 빠르게 바꿀 수 있음)를 여러 각도로 스캔해서 자기장을 여러 번
-관측하면 신호가 살아날 수 있음. compare_probe_combos.py가 예전(analytical force_model 기반)
-찾아둔 "robust 4-probe 조합" phi=[-150,-90,-30,60]을 그대로 재사용.
-
-케이스 하나 = (L_M, s, beta, depth) 고정(스캔 중 안 바뀜) + phi 4곳에서 각각 B_delta 계산
--> MultiProbeEstimator(compare_probe_combos.py 구조: probe별 공유 CNN 인코더 -> concat -> head)
-   를 회귀 대신 5구간 분류로 학습.
+train_segment_classifier_multiprobe_auxreg.py의 4구간 버전. 팁쪽 구간(s=80~100mm, 기존 5번째
+구간)은 지렛대 효과로 접촉힘이 원래 물리적으로 매우 작아(F_mag가 s=10~80mm 구간보다 훨씬
+약함) 실제 홀센서로는 신호를 거의 못 잡을 가능성이 높다는 판단 하에, 학습 데이터 생성 단계에서
+아예 s를 10~80mm로만 샘플링하고 4구간(20mm씩)으로 분류하도록 바꿈. 나머지 구조(11프로브
+능동탐색phi 고정 유지, 대체모델, 보조회귀 등)는 원본과 동일.
 """
 import json
 import multiprocessing as mp
@@ -36,7 +29,7 @@ TARGETS = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_uz_avg_mm", "tip_theta_deg_boa
 DEFAULTS = {"L_M_mm": 50.0, "phi_deg": 60.0, "beta_deg": 0.0}
 
 BIN_WIDTH_MM = 20.0
-N_CLASSES = 5
+N_CLASSES = 4  # 원본 5개(0-100mm)에서 팁쪽 80-100mm 제외 -> 4개(0-80mm)
 PHI_PROBES = [-150.0, -120.0, -90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0, 120.0, 150.0]  # 11개 전부(우리 FEA 그리드와 동일)
 N_PROBES = len(PHI_PROBES)
 N_SAMPLES = int(os.environ.get("N_SAMPLES", 150_000))
@@ -69,7 +62,8 @@ N_ENSEMBLE = 10  # 대체모델 예측오차(RMSE)가 s 10mm당 실제 신호 �
 if __name__ == "__main__":
     t_start = time.time()
 
-    # ── 1) FEA 데이터 병합 + 대체모델(surrogate) 학습 (기존과 동일) ──────────
+    # ── 1) FEA 데이터 병합 + 대체모델(surrogate) 학습 (원본과 동일 - 팁쪽 데이터도 포함해서
+    #        학습해야 대체모델 함수 자체의 정확도가 좋아짐. 샘플링 범위만 나중에 제한함) ──
     SOURCES = ["fea_lm_phi_pos_sweep_all.json", "fea_bent_contact_sweep.json",
                "fea_geom_sweep_all.json", "fea_angle_sweep_all.json"]
     all_rows = []
@@ -131,7 +125,7 @@ if __name__ == "__main__":
     print(f"대체모델 학습 완료 ({time.time()-t_start:.0f}s)")
 
     # ── 2) 15만개 멀티프로브 합성 시나리오 (멀티프로세싱) ────────────────────
-    # 케이스 하나 = 물리적 접촉(L_M, s, beta, depth) 고정 + phi를 PHI_PROBES 4곳으로 스캔
+    # 케이스 하나 = 물리적 접촉(L_M, s, beta, depth) 고정 + phi를 PHI_PROBES 11곳으로 스캔
     def worker(args):
         widx, n_chunk, surrogate_states, X_mean, X_std, y_mean, y_std = args
         sys.path.insert(0, os.path.join(HERE, "..", "..", "force_model"))
@@ -142,7 +136,7 @@ if __name__ == "__main__":
         SENSOR_HEIGHT_MM = 15
         sensor_positions = [(x, y, SENSOR_HEIGHT_MM) for y in np.linspace(180, 0, 5) for x in np.linspace(0, 180, 5)]
         sensors = magpy.Collection([magpy.Sensor(position=pos) for pos in sensor_positions])
-        MAGNET_BR_TESLA = 0.36
+        MAGNET_BR_TESLA = 0.4
         main_magnet = magpy.magnet.Cylinder(polarization=(0, MAGNET_BR_TESLA, 0), dimension=(2, 2))
         mom = magpy.magnet.Cylinder(polarization=(0, -MAGNET_BR_TESLA, 0), dimension=(1, 8))
         mscr_robot = magpy.Collection(main_magnet, mom)
@@ -174,7 +168,7 @@ if __name__ == "__main__":
 
         rng = np.random.default_rng(2000 + widx)
         L_M_range = (0.0, 100.0)
-        s_range = (10.0, 100.0)
+        s_range = (10.0, 80.0)  # 팁쪽 80-100mm 제외 (힘이 너무 약해 실제 감지 불가로 판단)
         FIXED_DEPTH = 0.10  # mm - 실제 FEA 스윕(fea_lm_phi_pos_sweep_all.json)과 동일하게 고정.
         # depth를 0.02~0.20mm로 무작위 섞었더니 s에 따른 신호(최대 266배 차이)보다 depth로 인한
         # 크기 변화가 더 커서(F_mag가 s=10~80mm 사이에서 0.0008~0.213mN까지 벌어지는데 depth
@@ -190,6 +184,7 @@ if __name__ == "__main__":
         # Fy_board=Fx_local - master_pipeline.py의 팁변위 변환과 동일한 규칙)으로 먼저 보드좌표계로
         # 통일한 뒤 11개 프로브 평균을 씀. F_mag는 방향 무관이라 그냥 평균.
         fb = np.zeros((n_chunk, 3), dtype=np.float32)  # Fx_board, Fy_board, F_mag 평균
+        sb = np.zeros(n_chunk, dtype=np.float32)  # 연속값 s(mm) - 보조회귀 타깃 (경계오류 완화 목적)
         n_ok = 0
         while n_ok < n_chunk:
             # 스캔 중 고정되는 값들: 로봇이 그 순간 있던 L_M, 실제 접촉(s, beta, depth)
@@ -240,8 +235,9 @@ if __name__ == "__main__":
             Xb[n_ok] = probes
             yb[n_ok] = s_to_bin(s)
             fb[n_ok] = [np.mean(fx_board_list), np.mean(fy_board_list), np.mean(fmag_list)]
+            sb[n_ok] = s
             n_ok += 1
-        return Xb, yb, fb
+        return Xb, yb, fb, sb
 
     print(f"15만개 멀티프로브({N_PROBES}개 phi={PHI_PROBES}) 합성 데이터 생성 시작 ({N_WORKERS}-way 병렬)...")
     t_gen = time.time()
@@ -254,11 +250,12 @@ if __name__ == "__main__":
     X_all = np.concatenate([r[0] for r in results], axis=0)
     y_all = np.concatenate([r[1] for r in results], axis=0)
     f_all = np.concatenate([r[2] for r in results], axis=0)  # Fx_board, Fy_board, F_mag (평균, 단위 N)
+    s_all = np.concatenate([r[3] for r in results], axis=0)  # 연속값 s(mm) - 보조회귀 타깃
     print(f"합성 데이터 생성 완료: {len(y_all)}개 ({time.time()-t_gen:.0f}s)")
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
 
-    np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_multiprobe_150k_11probe_force.npz"),
-             X=X_all, y=y_all, f=f_all)
+    np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_multiprobe_150k_11probe_auxreg_4seg.npz"),
+             X=X_all, y=y_all, f=f_all, s=s_all)
 
     # F_mag(3번째 열)은 대체모델이 "항상 0 이상"이라는 물리적 제약 없이 예측한 값이라 22%가
     # 마이너스로 나오는 문제가 확인됨(특히 힘이 작은 케이스). Fx,Fy(부호 있는 값이라 이 문제
@@ -267,6 +264,11 @@ if __name__ == "__main__":
     f_mean, f_std = fxy_all.mean(axis=0), fxy_all.std(axis=0)
     f_std[f_std < 1e-12] = 1.0
     f_norm = (fxy_all - f_mean) / f_std
+
+    # 보조회귀(auxiliary regression): 구간분류 오답의 98.4%가 인접구간 혼동이라(경계문제),
+    # 연속값 s도 같이 예측하게 해서 경계 근처 표현력을 보강 (ordinal 성질을 반영하려는 목적)
+    s_mean, s_std = s_all.mean(), s_all.std()
+    s_norm = (s_all - s_mean) / s_std
 
     # ── 3) 최종 멀티프로브 분류기 학습 (GPU) ──────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -282,16 +284,19 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(
         TensorDataset(torch.tensor(X_norm[train_idx]).float(), torch.tensor(y_all[train_idx]).long(),
-                      torch.tensor(f_norm[train_idx]).float()),
+                      torch.tensor(f_norm[train_idx]).float(), torch.tensor(s_norm[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
     val_y = torch.tensor(y_all[val_idx]).long().to(device)
     val_f = torch.tensor(f_norm[val_idx]).float().to(device)
     val_f_phys = f_all[val_idx]  # 실제 단위(N) 참고용, 3열(Fx,Fy,F_mag) 그대로 - F_mag은 비교용
+    val_s = torch.tensor(s_norm[val_idx]).float().to(device)
+    val_s_phys = s_all[val_idx]
 
     class MultiProbeClassifier(nn.Module):
-        """구간분류(5-class) + 힘(Fx,Fy 보드좌표계, 2개 연속값) 동시 예측 멀티태스크 모델.
-        F_mag은 별도 예측하지 않고 예측된 Fx,Fy로부터 sqrt(Fx^2+Fy^2)로 유도(항상 양수 보장)."""
+        """구간분류(4-class) + 힘(Fx,Fy 보드좌표계, 2개 연속값) + 연속값 s(보조회귀, 1개) 동시 예측.
+        F_mag은 별도 예측하지 않고 예측된 Fx,Fy로부터 sqrt(Fx^2+Fy^2)로 유도(항상 양수 보장).
+        s 보조회귀는 구간분류 오답의 98.4%가 인접구간 혼동이라(경계문제), trunk 표현력을 보강."""
         def __init__(self, n_probes=N_PROBES, n_classes=N_CLASSES, n_force=2):
             super().__init__()
             self.n_probes = n_probes
@@ -305,17 +310,20 @@ if __name__ == "__main__":
             )
             self.seg_head = nn.Linear(128, n_classes)
             self.force_head = nn.Linear(128, n_force)
+            self.s_head = nn.Linear(128, 1)
 
         def forward(self, x):  # x: (B, n_probes, 3, 5, 5)
             embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
             h = self.trunk(torch.cat(embeds, dim=1))
-            return self.seg_head(h), self.force_head(h)
+            return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1)
 
     model = MultiProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
     force_criterion = nn.MSELoss()
+    s_criterion = nn.MSELoss()
     FORCE_LOSS_WEIGHT = 1.0  # 두 손실이 비슷한 스케일(정규화됨)이라 1:1로 시작
+    S_LOSS_WEIGHT = 1.0
 
     t_train = time.time()
     best_val_loss = float("inf")
@@ -323,34 +331,37 @@ if __name__ == "__main__":
     best_epoch = -1
     for epoch in range(60):
         model.train()
-        for bx, by, bf in train_loader:
-            bx, by, bf = bx.to(device), by.to(device), bf.to(device)
+        for bx, by, bf, bs in train_loader:
+            bx, by, bf, bs = bx.to(device), by.to(device), bf.to(device), bs.to(device)
             optimizer.zero_grad()
-            seg_logits, force_pred = model(bx)
-            loss = seg_criterion(seg_logits, by) + FORCE_LOSS_WEIGHT * force_criterion(force_pred, bf)
+            seg_logits, force_pred, s_pred = model(bx)
+            loss = (seg_criterion(seg_logits, by) + FORCE_LOSS_WEIGHT * force_criterion(force_pred, bf)
+                    + S_LOSS_WEIGHT * s_criterion(s_pred, bs))
             loss.backward()
             optimizer.step()
         model.eval()
         with torch.no_grad():
-            val_seg_logits, val_force_pred = model(val_X)
+            val_seg_logits, val_force_pred, val_s_pred = model(val_X)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
             val_force_loss = force_criterion(val_force_pred, val_f).item()
-            val_loss = val_seg_loss + FORCE_LOSS_WEIGHT * val_force_loss
+            val_s_loss = s_criterion(val_s_pred, val_s).item()
+            val_loss = val_seg_loss + FORCE_LOSS_WEIGHT * val_force_loss + S_LOSS_WEIGHT * val_s_loss
             val_acc = (val_seg_logits.argmax(dim=1) == val_y).float().mean().item()
         if val_loss < best_val_loss:  # 에폭별로 크게 흔들릴 수 있어서(작은샘플 테스트에서 확인됨)
             best_val_loss = val_loss  # val loss 기준으로 제일 좋았던 시점의 모델을 따로 저장
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             best_epoch = epoch + 1
         if (epoch + 1) % 5 == 0:
-            print(f"Epoch [{epoch+1:2d}/60] ValAcc {val_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}")
+            print(f"Epoch [{epoch+1:2d}/60] ValAcc {val_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}")
     print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (val loss 기준)")
 
     model.load_state_dict(best_state)
     model.eval()
     with torch.no_grad():
-        val_seg_logits, val_force_pred = model(val_X)
+        val_seg_logits, val_force_pred, val_s_pred = model(val_X)
         val_pred = val_seg_logits.argmax(dim=1)
         val_force_pred_phys = val_force_pred.cpu().numpy() * f_std + f_mean  # 정규화 해제 (N 단위)
+        val_s_pred_phys = val_s_pred.cpu().numpy() * s_std + s_mean
     final_acc = (val_pred == val_y).float().mean().item()
     conf = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
     for t, p in zip(val_y.tolist(), val_pred.tolist()):
@@ -363,6 +374,16 @@ if __name__ == "__main__":
     print("구간별 recall:", {bin_labels[i]: f"{per_class_recall[i]*100:.1f}%" for i in range(N_CLASSES)})
     print(f"\n혼동행렬 (행=실제, 열=예측, {bin_labels}):")
     print(conf.numpy())
+    adjacent = sum(conf[i, j].item() for i in range(N_CLASSES) for j in range(N_CLASSES) if abs(i - j) == 1)
+    total_err = conf.sum().item() - torch.trace(conf).item()
+    print(f"오답 중 인접구간 비율: {adjacent/max(1,total_err)*100:.1f}% (기존 98.4%와 비교)")
+
+    # 보조회귀(연속값 s) 성능
+    ss_res = np.sum((val_s_pred_phys - val_s_phys) ** 2)
+    ss_tot = np.sum((val_s_phys - val_s_phys.mean()) ** 2)
+    s_r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+    s_mae = np.mean(np.abs(val_s_pred_phys - val_s_phys))
+    print(f"\n보조회귀 s(연속값): R^2={s_r2:.3f}, MAE={s_mae:.2f}mm")
 
     # 힘(Fx,Fy, 보드좌표계) 회귀 성능 - R^2와 MAE. F_mag은 예측된 Fx,Fy로부터 유도(항상 양수).
     force_names = ["Fx_board_N", "Fy_board_N"]
@@ -394,9 +415,9 @@ if __name__ == "__main__":
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "X_mean": X_mean2, "X_std": X_std2,
-                "f_mean": f_mean, "f_std": f_std,
+                "f_mean": f_mean, "f_std": f_std, "s_mean": s_mean, "s_std": s_std,
                 "bin_width_mm": BIN_WIDTH_MM, "n_classes": N_CLASSES, "phi_probes": PHI_PROBES,
                 "force_names": force_names},
-               os.path.join(MODELS_DIR, "position_segment_classifier_multiprobe_150k_11probe_force_v2.pth"))
-    print(f"\n저장: {MODELS_DIR}/position_segment_classifier_multiprobe_150k_11probe_force_v2.pth")
+               os.path.join(MODELS_DIR, "position_segment_classifier_multiprobe_150k_11probe_auxreg_4seg.pth"))
+    print(f"\n저장: {MODELS_DIR}/position_segment_classifier_multiprobe_150k_11probe_auxreg_4seg.pth")
     print(f"\n총 소요시간: {(time.time()-t_start)/60:.1f}분")

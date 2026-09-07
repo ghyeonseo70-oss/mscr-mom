@@ -1,0 +1,55 @@
+대체모델 학습 데이터: 771개 (fea_lm_phi_pos_sweep_all.json, fea_bent_contact_sweep.json, fea_geom_sweep_all.json, fea_angle_sweep_all.json, fea_beta_generalization_check.json, fea_lm10_gap_check.json, fea_beta_fine_resolution.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용, 타깃별) ===
+  tip_ux_avg_mm: R^2=0.968
+  tip_uy_avg_mm: R^2=0.975
+  tip_uz_avg_mm: R^2=0.873
+  tip_theta_deg_board: R^2=0.973
+  Fx_total_N: R^2=0.968
+  Fy_total_N: R^2=0.547
+  Fz_total_N: R^2=0.725
+  F_mag_N: R^2=0.981
+대체모델 학습 완료 (132s)
+150000개 단일관측(능동탐색 없음) 합성 데이터 생성 시작 (16-way 병렬)...
+합성 데이터 생성 완료: 150000개 (2747s)
+구간별 샘플 수: {0: 21618, 1: 42597, 2: 43035, 3: 42750}
+최종 분류기 학습 시작 (device=cpu)...
+Epoch [ 1/60] ValAcc  57.5%  SegLoss 0.9542  ForceLoss 0.4124  SLoss 0.4587  ConfigLoss 0.3017
+Epoch [ 5/60] ValAcc  63.4%  SegLoss 0.8500  ForceLoss 0.2660  SLoss 0.3884  ConfigLoss 0.1365
+Epoch [10/60] ValAcc  66.0%  SegLoss 0.7776  ForceLoss 0.2075  SLoss 0.3372  ConfigLoss 0.0891
+Epoch [15/60] ValAcc  67.7%  SegLoss 0.7490  ForceLoss 0.1991  SLoss 0.3150  ConfigLoss 0.0795
+Epoch [20/60] ValAcc  67.8%  SegLoss 0.7374  ForceLoss 0.1859  SLoss 0.3177  ConfigLoss 0.0656
+Epoch [25/60] ValAcc  68.7%  SegLoss 0.7199  ForceLoss 0.1863  SLoss 0.3100  ConfigLoss 0.0676
+Epoch [30/60] ValAcc  68.6%  SegLoss 0.7171  ForceLoss 0.1784  SLoss 0.2929  ConfigLoss 0.0508
+Epoch [35/60] ValAcc  68.9%  SegLoss 0.7137  ForceLoss 0.1798  SLoss 0.2963  ConfigLoss 0.0688
+Epoch [40/60] ValAcc  69.2%  SegLoss 0.6987  ForceLoss 0.1673  SLoss 0.2837  ConfigLoss 0.0550
+Epoch [45/60] ValAcc  70.4%  SegLoss 0.6838  ForceLoss 0.1614  SLoss 0.2809  ConfigLoss 0.0528
+Epoch [50/60] ValAcc  69.9%  SegLoss 0.6824  ForceLoss 0.1736  SLoss 0.2758  ConfigLoss 0.0530
+Epoch [55/60] ValAcc  71.1%  SegLoss 0.6726  ForceLoss 0.1651  SLoss 0.2686  ConfigLoss 0.0504
+Epoch [60/60] ValAcc  70.5%  SegLoss 0.6757  ForceLoss 0.1661  SLoss 0.2769  ConfigLoss 0.0462
+학습 완료 (201s), 최적 epoch=59 (val loss 기준)
+
+=== 최종 검증 정확도: 71.3% (n_val=15000), 무작위 기준선=25.0% ===
+balanced accuracy(구간별 recall 평균): 71.6%
+구간별 recall: {'0-20mm': '73.5%', '20-40mm': '68.4%', '40-60mm': '56.6%', '60-80mm': '87.8%'}
+
+혼동행렬 (행=실제, 열=예측, ['0-20mm', '20-40mm', '40-60mm', '60-80mm']):
+[[1592  448   67   60]
+ [ 229 2882  678  426]
+ [   0  462 2444 1410]
+ [   2   32  491 3777]]
+오답 중 인접구간 비율: 86.4%
+
+보조회귀 s(연속값): R^2=0.730, MAE=7.50mm
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=15000) ===
+  Fx_board_N: R^2=0.791, MAE=0.0025mN
+  Fy_board_N: R^2=0.889, MAE=0.0048mN
+  F_mag(유도): R^2=0.869, MAE=0.0049mN
+
+=== 로봇 형상(L_M, phi) 회귀 성능 (액추에이터 슬랙 보정용, n_val=15000) ===
+  L_M_mm: R^2=0.943, MAE=4.37mm
+  phi_deg: R^2=0.950, MAE=13.24deg
+
+저장: C:\Users\gustj\Desktop\김현서\김현서\홀센서 코드\현서\scripts\contact_scenarios\fea\..\..\..\models/position_segment_classifier_singleprobe_4seg.pth
+
+총 소요시간: 51.3분

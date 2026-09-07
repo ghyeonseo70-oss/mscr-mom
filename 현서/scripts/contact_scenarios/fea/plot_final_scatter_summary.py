@@ -131,10 +131,11 @@ real_c = np.array(real_c, dtype=np.float32)
 
 with torch.no_grad():
     rX = torch.tensor(real_X_norm[:, None]).float()
-    _, r_force_pred, r_s_pred, r_config_pred, _ = cnn(rX)
+    _, r_force_pred, r_s_pred, r_config_pred, r_lm_zero_logit = cnn(rX)
     force_phys = r_force_pred.numpy() * f_std + f_mean
     s_phys = r_s_pred.numpy() * s_std + s_mean
     config_phys = r_config_pred.numpy() * c_std + c_mean
+    lm_zero_pred = (r_lm_zero_logit.numpy() > 0)
 
 fx_board_pred = force_phys[:, force_names.index("Fx_board_N")]
 fy_board_pred = force_phys[:, force_names.index("Fy_board_N")]
@@ -142,16 +143,20 @@ lm_pred = config_phys[:, config_names.index("L_M_mm")]
 phi_pred = config_phys[:, config_names.index("phi_deg")]
 lm_true = real_c[:, 0]
 phi_true = real_c[:, 1]
+# 2026-08-27 추가: lm_zero_head 기반 하이브리드(분류+회귀) L_M - "0에 가깝다"고 분류되면
+# 대표값 0mm, 아니면 기존 config_head 회귀값 그대로.
+lm_pred_hybrid = np.where(lm_zero_pred, 0.0, lm_pred)
 
 panels = [
     ("s (접촉위치, mm)", real_s, s_phys, "#2451A3"),
     ("phi (형상각도, deg)", phi_true, phi_pred, "#27AE60"),
-    ("L_M (자석위치, mm)", lm_true, lm_pred, "#C0392B"),
+    ("L_M 순수회귀 (mm)", lm_true, lm_pred, "#C0392B"),
+    ("L_M 하이브리드(분류+회귀) (mm)", lm_true, lm_pred_hybrid, "#E67E22"),
     ("Fx_board (mN)", real_fx_board * 1000, fx_board_pred * 1000, "#8E44AD"),
     ("Fy_board (mN)", real_fy_board * 1000, fy_board_pred * 1000, "#D68910"),
 ]
 
-fig, axes = plt.subplots(1, 5, figsize=(24, 5))
+fig, axes = plt.subplots(1, 6, figsize=(28, 5))
 for ax, (name, true_v, pred_v, color) in zip(axes, panels):
     r2 = r2_score(true_v, pred_v)
     lo, hi = min(true_v.min(), pred_v.min()), max(true_v.max(), pred_v.max())
@@ -170,9 +175,9 @@ for ax, (name, true_v, pred_v, color) in zip(axes, panels):
     ax.legend(fontsize=8, loc="upper left")
     ax.grid(True, linestyle=":", alpha=0.4)
 
-fig.suptitle("2026-08-26 세션 결론: 순수 실측 FEA 홀드아웃(n=99) 예측 vs 실제",
+fig.suptitle("2026-08-27 최신: 순수 실측 FEA 홀드아웃(n=99) 예측 vs 실제 (L_M 하이브리드 구조 반영)",
              fontweight="bold", fontsize=15, y=1.03)
 plt.tight_layout()
-out_path = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios", "final_scatter_summary_0826.png")
+out_path = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios", "final_scatter_summary_0827.png")
 plt.savefig(out_path, dpi=140, bbox_inches="tight")
 print("저장:", out_path)

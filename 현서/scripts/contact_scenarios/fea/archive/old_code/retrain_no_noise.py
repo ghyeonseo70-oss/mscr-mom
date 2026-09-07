@@ -26,7 +26,7 @@ from scipy.spatial.transform import Rotation
 SENSOR_HEIGHT_MM = 15
 sensor_positions = [(x, y, SENSOR_HEIGHT_MM) for y in np.linspace(180, 0, 5) for x in np.linspace(0, 180, 5)]
 sensors = magpy.Collection([magpy.Sensor(position=pos) for pos in sensor_positions])
-MAGNET_BR_TESLA = 0.36
+MAGNET_BR_TESLA = 0.4
 main_magnet = magpy.magnet.Cylinder(polarization=(0, MAGNET_BR_TESLA, 0), dimension=(2, 2))
 mom = magpy.magnet.Cylinder(polarization=(0, -MAGNET_BR_TESLA, 0), dimension=(1, 8))
 mscr_robot = magpy.Collection(main_magnet, mom)

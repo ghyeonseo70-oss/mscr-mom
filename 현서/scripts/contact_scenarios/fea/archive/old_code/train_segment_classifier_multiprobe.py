@@ -142,7 +142,7 @@ if __name__ == "__main__":
         SENSOR_HEIGHT_MM = 15
         sensor_positions = [(x, y, SENSOR_HEIGHT_MM) for y in np.linspace(180, 0, 5) for x in np.linspace(0, 180, 5)]
         sensors = magpy.Collection([magpy.Sensor(position=pos) for pos in sensor_positions])
-        MAGNET_BR_TESLA = 0.36
+        MAGNET_BR_TESLA = 0.4
         main_magnet = magpy.magnet.Cylinder(polarization=(0, MAGNET_BR_TESLA, 0), dimension=(2, 2))
         mom = magpy.magnet.Cylinder(polarization=(0, -MAGNET_BR_TESLA, 0), dimension=(1, 8))
         mscr_robot = magpy.Collection(main_magnet, mom)
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         # 크기 변화가 더 커서(F_mag가 s=10~80mm 사이에서 0.0008~0.213mN까지 벌어지는데 depth
         # 범위만으로도 비슷한 배율이 나옴) 위치 신호를 덮어버리는 게 확인됨 -> 교수님 말대로
         # 힘/깊이는 추정 대상이 아니니 아예 고정해서 이 혼란 요인을 제거.
-        FIXED_BETA = 0.0  # beta 확인용 실험: 무작위(0~360) 대신 고정해서 남은 교란요인인지 테스트
+        beta_range = (0.0, 360.0)
 
         free_cache = {}
         Xb = np.zeros((n_chunk, N_PROBES, 3, 5, 5), dtype=np.float32)
@@ -195,7 +195,7 @@ if __name__ == "__main__":
             # 스캔 중 고정되는 값들: 로봇이 그 순간 있던 L_M, 실제 접촉(s, beta, depth)
             L_M = rng.uniform(*L_M_range)
             s = rng.uniform(*s_range)
-            beta = FIXED_BETA
+            beta = rng.uniform(*beta_range)
             depth = FIXED_DEPTH
 
             ok = True
@@ -257,7 +257,7 @@ if __name__ == "__main__":
     print(f"합성 데이터 생성 완료: {len(y_all)}개 ({time.time()-t_gen:.0f}s)")
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
 
-    np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_multiprobe_150k_11probe_betafixed.npz"),
+    np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_multiprobe_150k_11probe_force.npz"),
              X=X_all, y=y_all, f=f_all)
 
     # F_mag(3번째 열)은 대체모델이 "항상 0 이상"이라는 물리적 제약 없이 예측한 값이라 22%가
@@ -397,6 +397,6 @@ if __name__ == "__main__":
                 "f_mean": f_mean, "f_std": f_std,
                 "bin_width_mm": BIN_WIDTH_MM, "n_classes": N_CLASSES, "phi_probes": PHI_PROBES,
                 "force_names": force_names},
-               os.path.join(MODELS_DIR, "position_segment_classifier_multiprobe_150k_11probe_betafixed.pth"))
-    print(f"\n저장: {MODELS_DIR}/position_segment_classifier_multiprobe_150k_11probe_betafixed.pth")
+               os.path.join(MODELS_DIR, "position_segment_classifier_multiprobe_150k_11probe_force_v2.pth"))
+    print(f"\n저장: {MODELS_DIR}/position_segment_classifier_multiprobe_150k_11probe_force_v2.pth")
     print(f"\n총 소요시간: {(time.time()-t_start)/60:.1f}분")

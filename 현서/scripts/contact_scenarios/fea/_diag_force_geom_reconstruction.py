@@ -132,15 +132,19 @@ real_fx_true = np.array(real_fx_total)  # Fy_board 정답
 
 with torch.no_grad():
     rX = torch.tensor(real_X_norm[:, None]).float()
-    _, r_force_pred, r_s_pred, r_config_pred, _ = cnn(rX)
+    _, r_force_pred, r_s_pred, r_config_pred, r_lm_zero_logit = cnn(rX)
     force_phys = r_force_pred.numpy() * f_std + f_mean       # [Fx_board_pred, Fy_board_pred]
     s_phys = (r_s_pred.numpy() * s_std + s_mean)
     config_phys = r_config_pred.numpy() * c_std + c_mean      # [L_M_pred, phi_pred]
+    lm_zero_pred = (r_lm_zero_logit.numpy() > 0)
 
 fx_board_pred_direct = force_phys[:, force_names.index("Fx_board_N")]  # 지금까지의 직접회귀 예측
 fy_board_pred_direct = force_phys[:, force_names.index("Fy_board_N")]
-lm_pred = config_phys[:, config_names.index("L_M_mm")]
+lm_pred_raw = config_phys[:, config_names.index("L_M_mm")]
 phi_pred = config_phys[:, config_names.index("phi_deg")]
+# 2026-08-27 추가: L_M은 이제 순수회귀 대신 하이브리드(분류+회귀, lm_zero_head)를 씀 -
+# 오늘 확인한 대로 이게 순수회귀보다 정확해서, 기하학 재구성의 입력 품질도 더 나아짐.
+lm_pred = np.where(lm_zero_pred, 0.0, lm_pred_raw)
 
 print(f"\n[참고] 지금까지의 직접회귀 R^2: Fx_board={r2_score(real_fy_true, fx_board_pred_direct):.3f}  "
       f"Fy_board={r2_score(real_fx_true, fy_board_pred_direct):.3f}")

@@ -1,0 +1,427 @@
+
+%syms removed - Symbolic Math Toolbox not installed, unused anyway
+L=0.1;                   %%m
+E=850*1000;             %%pa
+mu0=4*pi*10^-7;
+Br=0.4;                    %T
+M=Br/mu0         %%A/m
+D=0.002;
+D2=0.001;
+A=D^2*pi/4;
+I=D^4*pi/64-D2^4*pi/64;
+ ;                %%A/m 
+v1=0.002*pi*D^2/4;      %%h=2mm
+v11=0.006*pi*D^2/16;        %%h=4mm
+v2=0.002*pi*D^2/4;
+dl = L/10000 ;        %% 분해능
+EN=2;
+figure
+hold on
+xlim([-10,10])
+ylim([-180,180])
+MarkerSize = 1
+
+H=40000;
+
+L1=0.01;
+
+data1x=zeros(1,13);
+data1y=zeros(1,13);
+thetaset=[31 41 51 61 71 81 91 101 111 121 131 141 151];
+  for  i=1:13
+        thetaB2=thetaset(i);
+            fun = @(x) x(1)^2+x(2)^2;
+            A = [];
+            b = [];
+            Aeq = [];
+            beq = [];
+            lb = [];
+            ub = [];
+            c = @(x) abs(abs(x(1))-abs(x(2)))-pi;
+            EA0=[0 0];
+            ceq=@(x) [EN*E*I*x(1)/-((H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))-(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L1;...
+            (E*I*(x(2)-x(1))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L+L1];
+            nonlinfcn = @(x)deal(c(x),ceq(x));
+            x = fmincon(fun,EA0,A,b,Aeq,beq,lb,ub,nonlinfcn);
+            A1lin=linspace(0,x(1),500);
+            A2lin=linspace(x(1),x(2),500);
+            x1=EN*E*I*sin(A1lin)/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y1=EN*E*I*(1-cos(A1lin))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x10=EN*E*I*sin(x(1))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y10=EN*E*I*(1-cos(x(1)))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x2=(E*I*(sin(A2lin)-sin(x(1)))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+x10;
+        y2=(E*I*(cos(x(1))-cos(A2lin))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+y10;
+    
+    
+        xtotal=[x1,x2];
+        ytotal=[y1,y2];
+ 
+
+
+        r=ytotal(1000);
+  
+        
+          data1x(1,i)=r*100;
+          data1y(1,i)=x(2)*180/pi;
+            
+  
+    end      
+%data1x(8)=-0.3;
+%data1y(8)=56;
+  plot( data1x,data1y,'k','LineWidth',1)
+  plot(-data1x,-data1y,'k','LineWidth',1)
+  %plot(data1x(1),data1y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#0072BD")
+  plot(data1x(1),data1y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(data1x(4),data1y(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(data1x(7),data1y(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(data1x(10),data1y(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(data1x(13),data1y(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE") 
+  %plot(-data1x(1),-data1y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#0072BD")
+  plot(-data1x(1),-data1y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#D95319")
+  plot(-data1x(4),-data1y(4),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#EDB120")
+  plot(-data1x(7),-data1y(7),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#7E2F8E")
+  plot(-data1x(10),-data1y(10),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#77AC30")
+  plot(-data1x(13),-data1y(13),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#4DBEEE")  
+           
+L1=0.02;
+
+data2x=zeros(1,13);
+data2y=zeros(1,13);
+thetaset=[ 30 40 50 60 70 80 90 100 110 120 130 140 150];
+  for  i=1:13
+        thetaB2=thetaset(i);
+            fun = @(x) x(1)^2+x(2)^2;
+            A = [];
+            b = [];
+            Aeq = [];
+            beq = [];
+            lb = [];
+            ub = [];
+            c = @(x) abs(abs(x(1))-abs(x(2)))-pi;
+            EA0=[0 0];
+            ceq=@(x) [EN*E*I*x(1)/-((H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))-(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L1;...
+            (E*I*(x(2)-x(1))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L+L1];
+            nonlinfcn = @(x)deal(c(x),ceq(x));
+            x = fmincon(fun,EA0,A,b,Aeq,beq,lb,ub,nonlinfcn);
+            A1lin=linspace(0,x(1),500);
+            A2lin=linspace(x(1),x(2),500);
+            x1=EN*E*I*sin(A1lin)/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y1=EN*E*I*(1-cos(A1lin))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x10=EN*E*I*sin(x(1))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y10=EN*E*I*(1-cos(x(1)))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x2=(E*I*(sin(A2lin)-sin(x(1)))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+x10;
+        y2=(E*I*(cos(x(1))-cos(A2lin))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+y10;
+    
+    
+        xtotal=[x1,x2];
+        ytotal=[y1,y2];
+ 
+
+
+        r=ytotal(1000);
+  
+        
+          data2x(1,i)=r*100;
+          data2y(1,i)=x(2)*180/pi;
+            
+  
+    end      
+
+  plot(data2x,data2y,'k','LineWidth',1)
+  plot(-data2x,-data2y,'k','LineWidth',1)
+  %plot(data2x(1),data2y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#0072BD")
+  plot(data2x(1),data2y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(data2x(4),data2y(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(data2x(7),data2y(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(data2x(10),data2y(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(data2x(13),data2y(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE") 
+  %plot(-data2x(1),-data2y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#0072BD")
+  plot(-data2x(1),-data2y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#D95319")
+  plot(-data2x(4),-data2y(4),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#EDB120")
+  plot(-data2x(7),-data2y(7),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#7E2F8E")
+  plot(-data2x(10),-data2y(10),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#77AC30")
+  plot(-data2x(13),-data2y(13),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#4DBEEE")  
+           
+
+L1=0.03;
+
+data3x=zeros(1,13);
+data3y=zeros(1,13);
+thetaset=[ 30 40 50 60 70 80 90 100 110 120 130 140 150];
+  for  i=1:13
+       thetaB2=thetaset(i);
+            fun = @(x) x(1)^2+x(2)^2;
+            A = [];
+            b = [];
+            Aeq = [];
+            beq = [];
+            lb = [];
+            ub = [];
+            c = @(x) abs(abs(x(1))-abs(x(2)))-pi;
+            EA0=[0 0];
+            ceq=@(x) [EN*E*I*x(1)/-((H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))-(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L1;...
+            (E*I*(x(2)-x(1))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L+L1];
+            nonlinfcn = @(x)deal(c(x),ceq(x));
+            x = fmincon(fun,EA0,A,b,Aeq,beq,lb,ub,nonlinfcn);
+            A1lin=linspace(0,x(1),500);
+            A2lin=linspace(x(1),x(2),500);
+            x1=EN*E*I*sin(A1lin)/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y1=EN*E*I*(1-cos(A1lin))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x10=EN*E*I*sin(x(1))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y10=EN*E*I*(1-cos(x(1)))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x2=(E*I*(sin(A2lin)-sin(x(1)))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+x10;
+        y2=(E*I*(cos(x(1))-cos(A2lin))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+y10;
+    
+    
+        xtotal=[x1,x2];
+        ytotal=[y1,y2];
+ 
+
+
+        r=ytotal(1000);
+  
+        
+          data3x(1,i)=r*100;
+          data3y(1,i)=x(2)*180/pi;
+            
+  
+    end      
+%data3x(10)=0.0278;
+%data3y(10)=107.4762;
+  plot(data3x,data3y,'k','LineWidth',1)
+  plot(-data3x,-data3y,'k','LineWidth',1)
+  %plot(data3x(1),data3y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#0072BD")
+  plot(data3x(1),data3y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(data3x(4),data3y(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(data3x(7),data3y(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(data3x(10),data3y(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(data3x(13),data3y(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE") 
+  %plot(-data3x(1),-data3y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#0072BD")
+  plot(-data3x(1),-data3y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#D95319")
+  plot(-data3x(4),-data3y(4),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#EDB120")
+  plot(-data3x(7),-data3y(7),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#7E2F8E")
+  plot(-data3x(10),-data3y(10),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#77AC30")
+  plot(-data3x(13),-data3y(13),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#4DBEEE")  
+           
+
+L1=0.04;
+
+data4x=zeros(1,13);
+data4y=zeros(1,13);
+thetaset=[ 30 40 50 60 70 80 90 100 110 120 130 140 150];
+  for  i=1:13
+        thetaB2=thetaset(i);
+            fun = @(x) x(1)^2+x(2)^2;
+            A = [];
+            b = [];
+            Aeq = [];
+            beq = [];
+            lb = [];
+            ub = [];
+            c = @(x) abs(abs(x(1))-abs(x(2)))-pi;
+            EA0=[0 0];
+            ceq=@(x) [EN*E*I*x(1)/-((H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))-(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L1;...
+            (E*I*(x(2)-x(1))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L+L1];
+            nonlinfcn = @(x)deal(c(x),ceq(x));
+            x = fmincon(fun,EA0,A,b,Aeq,beq,lb,ub,nonlinfcn);
+            A1lin=linspace(0,x(1),500);
+            A2lin=linspace(x(1),x(2),500);
+            x1=EN*E*I*sin(A1lin)/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y1=EN*E*I*(1-cos(A1lin))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x10=EN*E*I*sin(x(1))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y10=EN*E*I*(1-cos(x(1)))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x2=(E*I*(sin(A2lin)-sin(x(1)))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+x10;
+        y2=(E*I*(cos(x(1))-cos(A2lin))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+y10;
+    
+    
+        xtotal=[x1,x2];
+        ytotal=[y1,y2];
+ 
+
+
+        r=ytotal(1000);
+  
+        
+          data4x(1,i)=r*100;
+          data4y(1,i)=x(2)*180/pi;
+            
+  
+    end      
+
+  plot(data4x,data4y,'k','LineWidth',1)
+  plot(-data4x,-data4y,'k','LineWidth',1)
+  %plot(data4x(1),data4y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#0072BD")
+  plot(data4x(1),data4y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(data4x(4),data4y(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(data4x(7),data4y(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(data4x(10),data4y(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(data4x(13),data4y(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE") 
+  %plot(-data4x(1),-data4y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#0072BD")
+  plot(-data4x(1),-data4y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#D95319")
+  plot(-data4x(4),-data4y(4),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#EDB120")
+  plot(-data4x(7),-data4y(7),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#7E2F8E")
+  plot(-data4x(10),-data4y(10),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#77AC30")
+  plot(-data4x(13),-data4y(13),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#4DBEEE")  
+           
+L1=0.05;
+
+data5x=zeros(1,13);
+data5y=zeros(1,13);
+thetaset=[ 30 40 50 60 70 80 90 100 110 120 130 140 150];
+  for  i=1:13
+       thetaB2=thetaset(i);
+            fun = @(x) x(1)^2+x(2)^2;
+            A = [];
+            b = [];
+            Aeq = [];
+            beq = [];
+            lb = [];
+            ub = [];
+            c = @(x) abs(abs(x(1))-abs(x(2)))-pi;
+            EA0=[0 0];
+            ceq=@(x) [EN*E*I*x(1)/-((H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))-(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L1;...
+            (E*I*(x(2)-x(1))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))-L+L1];
+            nonlinfcn = @(x)deal(c(x),ceq(x));
+            x = fmincon(fun,EA0,A,b,Aeq,beq,lb,ub,nonlinfcn);
+            A1lin=linspace(0,x(1),500);
+            A2lin=linspace(x(1),x(2),500);
+            x1=EN*E*I*sin(A1lin)/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y1=EN*E*I*(1-cos(A1lin))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x10=EN*E*I*sin(x(1))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+        y10=EN*E*I*(1-cos(x(1)))/(-(H*M*v11*mu0*sin((thetaB2*pi/180)-x(1)))+(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))));
+    
+        x2=(E*I*(sin(A2lin)-sin(x(1)))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+x10;
+        y2=(E*I*(cos(x(1))-cos(A2lin))/(H*M*v2*mu0*sin((thetaB2*pi/180)-x(2))))+y10;
+    
+    
+        xtotal=[x1,x2];
+        ytotal=[y1,y2];
+ 
+
+
+        r=ytotal(1000);
+  
+        
+          data5x(1,i)=r*100;
+          data5y(1,i)=x(2)*180/pi;
+            
+  
+    end      
+
+  plot(data5x,data5y,'k','LineWidth',1)
+  plot(-data5x,-data5y,'k','LineWidth',1)
+  %plot(data5x(1),data5y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#0072BD")
+  plot(data5x(1),data5y(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(data5x(4),data5y(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(data5x(7),data5y(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(data5x(10),data5y(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(data5x(13),data5y(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE") 
+  %plot(-data5x(1),-data5y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#0072BD")
+  plot(-data5x(1),-data5y(1),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#D95319")
+  plot(-data5x(4),-data5y(4),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#EDB120")
+  plot(-data5x(7),-data5y(7),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#7E2F8E")
+  plot(-data5x(10),-data5y(10),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#77AC30")
+  plot(-data5x(13),-data5y(13),'*','LineWidth',1,'Markersize',5,"MarkeredgeColor","#4DBEEE")  
+           
+
+%v11=0.001*pi*D^2/16;
+
+  data0x=zeros(1,15);
+data0y=zeros(1,15);
+L=0.1;
+  
+  for  i=1:15
+        thetaB=i*10;
+   fun = @(x) x;
+            A = [];
+            b = [];
+            Aeq = [];
+            beq = [];
+            lb = [];
+            ub = [];
+            c = @(x) [abs(x)-pi] ; 
+            EA0=[0];
+            ceq=@(x) [(E*I*x/(H*M*v11*mu0*sin((thetaB*pi/180)-x)))-L];
+            nonlinfcn = @(x)deal(c(x),ceq(x));
+            
+           x = fmincon(fun,EA0,A,b,Aeq,beq,lb,ub,nonlinfcn)
+              Alpha=x;
+            Alin=linspace(0,Alpha,1000);
+
+        x=E*I*sin(Alin)/(H*M*v11*mu0*sin((thetaB*pi/180)-Alpha));
+        y=E*I*(1-cos(Alin))/(H*M*v11*mu0*sin((thetaB*pi/180)-Alpha));
+       
+
+        x0=E*I*sin(Alpha)/(H*M*v11*mu0*sin((thetaB*pi/180)-Alpha));
+        y0=E*I*(1-cos(Alpha))/(H*M*v11*mu0*sin((thetaB*pi/180)-Alpha));
+        
+        %plot(x,y)
+        %plot(x0,y0,'ro','MarkerSize',3)
+       
+        % plot(0,0,'-ro','MarkerSize',3)
+          data0x(1,i)=y0;
+          data0y(1,i)=Alpha*180/pi;
+
+         data0xt=100*[flip(-data0x),0,data0x];
+         data0yt=[flip(-data0y),0,data0y];
+            
+  
+
+            
+  end
+  %plot(data0xt,data0yt,'-r','MarkerSize',2,'LineWidth',2)
+
+ plot(data0xt,data0yt,'k','LineWidth',1)
+  plot(data0xt(16),data0yt(16),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#0072BD")
+  plot(data0xt(13),data0yt(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(data0xt(10),data0yt(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(data0xt(7),data0yt(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(data0xt(4),data0yt(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(data0xt(1),data0yt(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE") 
+  
+  plot(-data0xt(13),-data0yt(13),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#D95319")
+  plot(-data0xt(10),-data0yt(10),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#EDB120")
+  plot(-data0xt(7),-data0yt(7),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#7E2F8E")
+  plot(-data0xt(4),-data0yt(4),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#77AC30")
+  plot(-data0xt(1),-data0yt(1),'*','Markersize',5,'Linewidth',1,"MarkeredgeColor","#4DBEEE")   
+
+orth0x=[-data0xt(16) data1x(1) data2x(1) data3x(1) data4x(1) data5x(1)];
+  orth0y=[-data0yt(16) data1y(1) data2y(1) data3y(1) data4y(1) data5y(1)];
+  %plot(orth0x,orth0y,'--','LineWidth',1,'Color',"#0072BD")
+  %plot(-orth0x,-orth0y,'--','LineWidth',1,'Color',"#0072BD")
+  orth1x=[-data0xt(13) data1x(1) data2x(1) data3x(1) data4x(1) data5x(1)];
+  orth1y=[-data0yt(13) data1y(1) data2y(1) data3y(1) data4y(1) data5y(1)];
+  plot(orth1x,orth1y,'--','LineWidth',1,'Color',"#D95319" )
+  plot(-orth1x,-orth1y,'--','LineWidth',1,'Color',"#D95319" )
+  orth2x=[-data0xt(10) data1x(4) data2x(4) data3x(4) data4x(4) data5x(4)];
+  orth2y=[-data0yt(10) data1y(4) data2y(4) data3y(4) data4y(4) data5y(4)];
+  plot(orth2x,orth2y,'--','LineWidth',1,'Color',"#EDB120" )
+  plot(-orth2x,-orth2y,'--','LineWidth',1,'Color',"#EDB120" )
+  orth3x=[-data0xt(7) data1x(7) data2x(7) data3x(7) data4x(7) data5x(7)];
+  orth3y=[-data0yt(7) data1y(7) data2y(7) data3y(7) data4y(7) data5y(7)];
+  plot(orth3x,orth3y,'--','LineWidth',1,'Color',"#7E2F8E" )
+  plot(-orth3x,-orth3y,'--','LineWidth',1,'Color',"#7E2F8E" )
+  orth4x=[-data0xt(4) data1x(10) data2x(10) data3x(10) data4x(10) data5x(10)];
+  orth4y=[-data0yt(4) data1y(10) data2y(10) data3y(10) data4y(10) data5y(10)];
+  plot(orth4x,orth4y,'--','LineWidth',1,'Color',"#77AC30" )
+  plot(-orth4x,-orth4y,'--','LineWidth',1,'Color',"#77AC30" )
+  orth5x=[-data0xt(1) data1x(13) data2x(13) data3x(13) data4x(13) data5x(13)];
+  orth5y=[-data0yt(1) data1y(13) data2y(13) data3y(13) data4y(13) data5y(13)];
+  plot(orth5x,orth5y,'--','LineWidth',1,'Color',"#4DBEEE" )
+  plot(-orth5x,-orth5y,'--','LineWidth',1,'Color',"#4DBEEE" )
+           
+         
+ 
+save('code2_results.mat', 'data0x','data0y','data0xt','data0yt', ...
+     'data1x','data1y','data2x','data2y','data3x','data3y', ...
+     'data4x','data4y','data5x','data5y')
+disp('SAVED_OK')

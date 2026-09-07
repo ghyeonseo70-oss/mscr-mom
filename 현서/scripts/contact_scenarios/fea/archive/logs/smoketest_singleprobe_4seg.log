@@ -1,0 +1,42 @@
+대체모델 학습 데이터: 608개 (fea_lm_phi_pos_sweep_all.json, fea_bent_contact_sweep.json, fea_geom_sweep_all.json, fea_angle_sweep_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용, 타깃별) ===
+  tip_ux_avg_mm: R^2=0.956
+  tip_uy_avg_mm: R^2=0.978
+  tip_uz_avg_mm: R^2=0.856
+  tip_theta_deg_board: R^2=0.965
+  Fx_total_N: R^2=0.959
+  Fy_total_N: R^2=0.658
+  Fz_total_N: R^2=0.815
+  F_mag_N: R^2=0.982
+대체모델 학습 완료 (124s)
+3000개 단일관측(능동탐색 없음) 합성 데이터 생성 시작 (16-way 병렬)...
+합성 데이터 생성 완료: 3000개 (64s)
+구간별 샘플 수: {0: 394, 1: 840, 2: 855, 3: 911}
+최종 분류기 학습 시작 (device=cpu)...
+Epoch [ 1/15] ValAcc  36.7%  SegLoss 1.3451  ForceLoss 0.9125  SLoss 0.9156
+Epoch [ 5/15] ValAcc  43.7%  SegLoss 1.2118  ForceLoss 0.5992  SLoss 0.7630
+Epoch [10/15] ValAcc  38.7%  SegLoss 1.1820  ForceLoss 0.4178  SLoss 0.7561
+Epoch [15/15] ValAcc  42.0%  SegLoss 1.1790  ForceLoss 0.3975  SLoss 0.7296
+학습 완료 (1s), 최적 epoch=15 (val loss 기준)
+
+=== 최종 검증 정확도: 42.0% (n_val=300), 무작위 기준선=25.0% ===
+balanced accuracy(구간별 recall 평균): 40.6%
+구간별 recall: {'0-20mm': '37.8%', '20-40mm': '40.3%', '40-60mm': '18.1%', '60-80mm': '66.3%'}
+
+혼동행렬 (행=실제, 열=예측, ['0-20mm', '20-40mm', '40-60mm', '60-80mm']):
+[[17 20  2  6]
+ [ 8 31 11 27]
+ [ 3 28 15 37]
+ [ 0 10 22 63]]
+오답 중 인접구간 비율: 72.4%
+
+보조회귀 s(연속값): R^2=0.299, MAE=14.21mm
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=300) ===
+  Fx_board_N: R^2=0.718, MAE=0.0058mN
+  Fy_board_N: R^2=0.553, MAE=0.0168mN
+  F_mag(유도): R^2=0.757, MAE=0.0135mN
+
+저장: C:\Users\gustj\Desktop\김현서\김현서\홀센서 코드\현서\scripts\contact_scenarios\fea\..\..\..\models/position_segment_classifier_singleprobe_4seg.pth
+
+총 소요시간: 3.1분
