@@ -68,6 +68,21 @@ def s_to_bin(s_mm):
     return min(N_CLASSES - 1, int(s_mm / BIN_WIDTH_MM))
 
 
+# 2026-09-07 추가: _diag_s_breakdown.py로 s=60-100mm(팁 근처) MAE=9.49mm(다른 구간
+# 2.88~5.56mm)로 유독 나쁜 게 확인됨 - s>=40mm부터 60-100mm까지 부드럽게 커지는 연속
+# 가중치를 s_head loss에 곱해서 그 구간 오차에 더 민감하게 반응하게 함. (HIGH_PHI_WEIGHT
+# 실험에서 계단식 가중치가 정작 목표 구간을 못 고친 전례가 있어 이번엔 연속 램프로 설계함
+# - 그래도 "된다"는 보장은 없음, 실측 홀드아웃 재확인 필수.)
+S_WEIGHT_RAMP_START_MM = 40.0
+S_WEIGHT_RAMP_END_MM = 100.0
+S_WEIGHT_MAX = 3.0
+
+
+def s_spatial_weight(s_mm):
+    ramp = np.clip((s_mm - S_WEIGHT_RAMP_START_MM) / (S_WEIGHT_RAMP_END_MM - S_WEIGHT_RAMP_START_MM), 0.0, 1.0)
+    return 1.0 + (S_WEIGHT_MAX - 1.0) * ramp
+
+
 class SurrogateMLP(nn.Module):
     def __init__(self, n_in, n_out):
         super().__init__()
@@ -346,6 +361,10 @@ if __name__ == "__main__":
     # 2026-08-27 추가: lm_zero_head용 이진 라벨 - L_M(c_all[:,0])만으로 결정되는 단순
     # 함수라 worker()를 안 건드리고 여기서 한 번에 계산.
     lm_zero_all = (np.abs(c_all[:, 0]) < LM_ZERO_THRESHOLD_MM).astype(np.float32)
+    s_weight_all = s_spatial_weight(s_all).astype(np.float32)
+    print(f"s 공간가중치(s={S_WEIGHT_RAMP_START_MM:.0f}mm부터 {S_WEIGHT_RAMP_END_MM:.0f}mm까지 "
+          f"최대 {S_WEIGHT_MAX}배 램프): 평균={s_weight_all.mean():.2f}, "
+          f"s>={S_WEIGHT_RAMP_END_MM:.0f}mm 샘플 수={int((s_all>=S_WEIGHT_RAMP_END_MM).sum())}개")
     print(f"합성 데이터 생성 완료: {len(y_all)}개 ({time.time()-t_gen:.0f}s), "
           f"서로게이트 불일치로 거른 샘플: {n_rejected_total}개")
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
@@ -407,7 +426,8 @@ if __name__ == "__main__":
                       torch.tensor(f_norm[train_idx]).float(), torch.tensor(s_norm[train_idx]).float(),
                       torch.tensor(c_norm[train_idx]).float(),
                       torch.tensor(phi_weight_all[train_idx]).float(),
-                      torch.tensor(lm_zero_all[train_idx]).float()),
+                      torch.tensor(lm_zero_all[train_idx]).float(),
+                      torch.tensor(s_weight_all[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
     val_y = torch.tensor(y_all[val_idx]).long().to(device)
@@ -419,6 +439,7 @@ if __name__ == "__main__":
     val_c_phys = c_all[val_idx]
     val_phi_weight = torch.tensor(phi_weight_all[val_idx]).float().to(device)
     val_lm_zero = torch.tensor(lm_zero_all[val_idx]).float().to(device)
+    val_s_weight = torch.tensor(s_weight_all[val_idx]).float().to(device)
 
     # 2026-08-26 추가: 여기까지 최종 CNN(SingleProbeClassifier) 학습에는 시드 고정이 전혀
     # 없었음(대체모델 앙상블만 seed=i로 고정돼있었음) - 가중치 초기화, DataLoader shuffle이
@@ -433,7 +454,6 @@ if __name__ == "__main__":
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
-    s_criterion = nn.MSELoss()
     config_criterion = nn.MSELoss()
     lm_zero_criterion = nn.BCEWithLogitsLoss()
     # 2026-08-19 비판적 리뷰 #1: 대체모델 5-fold R^2가 Fy_total_N=-0.01(사실상 노이즈, 평균보다도
@@ -453,19 +473,22 @@ if __name__ == "__main__":
             per_sample = per_sample * sample_weight
         return per_sample.mean()
 
+    def weighted_s_loss(pred, true, sample_weight):
+        return (((pred - true) ** 2) * sample_weight).mean()
+
     t_train = time.time()
     best_bal_acc = -1.0
     best_state = None
     best_epoch = -1
     for epoch in range(N_EPOCHS):
         model.train()
-        for bx, by, bf, bs, bc, bw, blz in train_loader:
-            bx, by, bf, bs, bc, bw, blz = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                                            bc.to(device), bw.to(device), blz.to(device))
+        for bx, by, bf, bs, bc, bw, blz, bsw in train_loader:
+            bx, by, bf, bs, bc, bw, blz, bsw = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
+                                                 bc.to(device), bw.to(device), blz.to(device), bsw.to(device))
             optimizer.zero_grad()
             seg_logits, force_pred, s_pred, config_pred, lm_zero_logit = model(bx)
             loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                    + s_criterion(s_pred, bs) + config_criterion(config_pred, bc)
+                    + weighted_s_loss(s_pred, bs, bsw) + config_criterion(config_pred, bc)
                     + lm_zero_criterion(lm_zero_logit, blz))
             loss.backward()
             optimizer.step()
@@ -474,7 +497,7 @@ if __name__ == "__main__":
             val_seg_logits, val_force_pred, val_s_pred, val_config_pred, val_lm_zero_logit = model(val_X)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
             val_force_loss = weighted_force_loss(val_force_pred, val_f, val_phi_weight).item()
-            val_s_loss = s_criterion(val_s_pred, val_s).item()
+            val_s_loss = weighted_s_loss(val_s_pred, val_s, val_s_weight).item()
             val_config_loss = config_criterion(val_config_pred, val_c).item()
             val_lm_zero_acc = (((val_lm_zero_logit > 0).float() == val_lm_zero).float().mean().item())
             val_pred_epoch = val_seg_logits.argmax(dim=1)
@@ -599,31 +622,37 @@ if __name__ == "__main__":
         main_magnet_eval.orientation = Rot_eval.from_euler("z", -thL, degrees=True)
         return magpy_eval.getB(mscr_robot_eval, sensors_eval) * 1e6
 
-    real_X, real_y, real_f, real_s, real_c = [], [], [], [], []
-    for r in real_holdout_rows:
-        L_M, phi = r["L_M_mm"], r["phi_deg"]
-        s = r["contact_s_mm"]
-        try:
-            r_free = fm_eval.solve_shape(L_M=L_M, phi_deg=phi, loads=[])
-        except Exception:
-            continue
-        d_xL_local, d_yL_local = r["tip_uy_avg_mm"], r["tip_ux_avg_mm"]  # 축교환(worker()와 동일)
-        d_thL = -r["tip_theta_deg_board"]
-        # 2026-08-26: frac 근사 폐기, all_rows 로딩 시점에 채워진 실측(또는 하위호환 근사)
-        # mom_* 값을 그대로 씀(worker()와 동일한 축교환 방식).
-        d_xLM_local = r["mom_uy_avg_mm"]
-        d_yLM_local = r["mom_ux_avg_mm"]
-        d_thLM = -r["mom_theta_deg_board"]
-        xL_free, yL_free, thL_free = r_free["x_L"], r_free["y_L"], r_free["theta_L_deg"]
-        xLM_free, yLM_free, thLM_free = r_free["x_LM"], r_free["y_LM"], r_free["theta_LM_deg"]
-        B_free = compute_B_eval(xLM_free, yLM_free, thLM_free, xL_free, yL_free, thL_free)
-        B_load = compute_B_eval(xLM_free + d_xLM_local, yLM_free + d_yLM_local, thLM_free + d_thLM,
-                                 xL_free + d_xL_local, yL_free + d_yL_local, thL_free + d_thL)
-        real_X.append((B_load - B_free).reshape(5, 5, 3).transpose(2, 0, 1))
-        real_y.append(s_to_bin(s))
-        real_f.append([r["Fy_total_N"], r["Fx_total_N"]])  # fb와 동일 순서(축교환)
-        real_s.append(s)
-        real_c.append([L_M, phi])  # config_names=["L_M_mm","phi_deg"]와 동일 순서
+    # 2026-09-07 리팩터: 이 실측 행 -> B-field 배열 변환 로직을 함수로 뽑아서
+    # real_holdout_rows뿐 아니라 fit_rows(파인튜닝용)에도 재사용.
+    def rows_to_arrays(rows):
+        Xs, ys, fs, ss, cs = [], [], [], [], []
+        for r in rows:
+            L_M, phi = r["L_M_mm"], r["phi_deg"]
+            s = r["contact_s_mm"]
+            try:
+                r_free = fm_eval.solve_shape(L_M=L_M, phi_deg=phi, loads=[])
+            except Exception:
+                continue
+            d_xL_local, d_yL_local = r["tip_uy_avg_mm"], r["tip_ux_avg_mm"]  # 축교환(worker()와 동일)
+            d_thL = -r["tip_theta_deg_board"]
+            # 2026-08-26: frac 근사 폐기, all_rows 로딩 시점에 채워진 실측(또는 하위호환 근사)
+            # mom_* 값을 그대로 씀(worker()와 동일한 축교환 방식).
+            d_xLM_local = r["mom_uy_avg_mm"]
+            d_yLM_local = r["mom_ux_avg_mm"]
+            d_thLM = -r["mom_theta_deg_board"]
+            xL_free, yL_free, thL_free = r_free["x_L"], r_free["y_L"], r_free["theta_L_deg"]
+            xLM_free, yLM_free, thLM_free = r_free["x_LM"], r_free["y_LM"], r_free["theta_LM_deg"]
+            B_free = compute_B_eval(xLM_free, yLM_free, thLM_free, xL_free, yL_free, thL_free)
+            B_load = compute_B_eval(xLM_free + d_xLM_local, yLM_free + d_yLM_local, thLM_free + d_thLM,
+                                     xL_free + d_xL_local, yL_free + d_yL_local, thL_free + d_thL)
+            Xs.append((B_load - B_free).reshape(5, 5, 3).transpose(2, 0, 1))
+            ys.append(s_to_bin(s))
+            fs.append([r["Fy_total_N"], r["Fx_total_N"]])  # fb와 동일 순서(축교환)
+            ss.append(s)
+            cs.append([L_M, phi])  # config_names=["L_M_mm","phi_deg"]와 동일 순서
+        return Xs, ys, fs, ss, cs
+
+    real_X, real_y, real_f, real_s, real_c = rows_to_arrays(real_holdout_rows)
 
     if len(real_X) < 5:
         print(f"  free-shape 계산 성공 케이스가 {len(real_X)}개뿐이라 통계적으로 의미 있는 평가 불가")
@@ -635,50 +664,142 @@ if __name__ == "__main__":
         real_s_arr = np.array(real_s, dtype=np.float32)
         real_c_arr = np.array(real_c, dtype=np.float32)
 
-        model.eval()
-        with torch.no_grad():
-            rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5) - probe 차원 추가
-            r_seg_logits, r_force_pred, r_s_pred, r_config_pred, r_lm_zero_logit = model(rX)
-            r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
-            r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
-            r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
-            r_config_phys = r_config_pred.cpu().numpy() * c_std + c_mean
-            r_lm_zero_pred = (r_lm_zero_logit.cpu().numpy() > 0)
+        # 2026-09-07 리팩터: 아래 평가 블록을 함수로 뽑음 - 실측 파인튜닝(다음 블록) 전/후
+        # 성능을 같은 홀드아웃으로 두 번 비교해야 해서 재사용이 필요해짐.
+        def evaluate_real(label):
+            model.eval()
+            with torch.no_grad():
+                rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5)
+                r_seg_logits, r_force_pred, r_s_pred, r_config_pred, r_lm_zero_logit = model(rX)
+                r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
+                r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
+                r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
+                r_config_phys = r_config_pred.cpu().numpy() * c_std + c_mean
+                r_lm_zero_pred = (r_lm_zero_logit.cpu().numpy() > 0)
 
-        real_acc = float((r_pred_class == real_y_arr).mean())
-        conf_r = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
-        for t, p in zip(real_y_arr, r_pred_class):
-            conf_r[t, p] += 1
-        real_bal_acc = float(np.mean([conf_r[i, i] / max(1, conf_r[i].sum()) for i in range(N_CLASSES)]))
-        print(f"  구간분류: acc={real_acc*100:.1f}%, balanced acc={real_bal_acc*100:.1f}% (n={len(real_y_arr)}, "
-              f"합성-val 기준 balanced acc={best_bal_acc*100:.1f}%와 비교할 것)")
+            print(f"\n--- [{label}] 순수 실측 FEA 검증 (n={len(real_y_arr)}) ---")
+            real_acc = float((r_pred_class == real_y_arr).mean())
+            conf_r = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
+            for t, p in zip(real_y_arr, r_pred_class):
+                conf_r[t, p] += 1
+            real_bal_acc = float(np.mean([conf_r[i, i] / max(1, conf_r[i].sum()) for i in range(N_CLASSES)]))
+            print(f"  구간분류: acc={real_acc*100:.1f}%, balanced acc={real_bal_acc*100:.1f}%")
 
-        ss_res = np.sum((r_s_phys - real_s_arr) ** 2)
-        ss_tot = np.sum((real_s_arr - real_s_arr.mean()) ** 2)
-        s_r2_real = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-        print(f"  s(연속값): R^2={s_r2_real:.3f}, MAE={np.mean(np.abs(r_s_phys - real_s_arr)):.2f}mm")
+            ss_res = np.sum((r_s_phys - real_s_arr) ** 2)
+            ss_tot = np.sum((real_s_arr - real_s_arr.mean()) ** 2)
+            s_r2_real = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+            print(f"  s(연속값): R^2={s_r2_real:.3f}, MAE={np.mean(np.abs(r_s_phys - real_s_arr)):.2f}mm")
+            # 2026-09-07 추가: s>=60mm(팁 근처, 23번 스윕 대상 구간) 따로 확인 - 전체
+            # MAE만 보면 이 구간의 개선/악화가 다른 구간에 묻혀서 안 보일 수 있음.
+            tip_mask = real_s_arr >= 60.0
+            if tip_mask.sum() >= 3:
+                tip_mae = np.mean(np.abs(r_s_phys[tip_mask] - real_s_arr[tip_mask]))
+                print(f"    s>=60mm(팁 근처, n={int(tip_mask.sum())}) MAE={tip_mae:.2f}mm "
+                      f"(재튜닝 전 기준값 9.49mm와 비교할 것)")
 
-        for i, name in enumerate(force_names):
-            ss_res = np.sum((r_force_phys[:, i] - real_f_arr[:, i]) ** 2)
-            ss_tot = np.sum((real_f_arr[:, i] - real_f_arr[:, i].mean()) ** 2)
-            r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-            print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(r_force_phys[:, i] - real_f_arr[:, i]))*1000:.4f}mN")
+            for i, name in enumerate(force_names):
+                ss_res = np.sum((r_force_phys[:, i] - real_f_arr[:, i]) ** 2)
+                ss_tot = np.sum((real_f_arr[:, i] - real_f_arr[:, i].mean()) ** 2)
+                r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+                print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(r_force_phys[:, i] - real_f_arr[:, i]))*1000:.4f}mN")
+                # Fx_board(=force_names[0])는 |phi|>=90 구간만 따로도 확인 - 20/23번에서
+                # 계속 추적해온 구간(재튜닝 전 기준값 R^2=0.355).
+                if i == 0:
+                    hp_mask = np.abs(real_c_arr[:, 1]) >= 90
+                    if hp_mask.sum() >= 3:
+                        ss_res_hp = np.sum((r_force_phys[hp_mask, i] - real_f_arr[hp_mask, i]) ** 2)
+                        ss_tot_hp = np.sum((real_f_arr[hp_mask, i] - real_f_arr[hp_mask, i].mean()) ** 2)
+                        r2_hp = 1 - ss_res_hp / ss_tot_hp if ss_tot_hp > 0 else float("nan")
+                        print(f"    |phi|>=90(n={int(hp_mask.sum())}) R^2={r2_hp:.3f} (기준값 0.355와 비교할 것)")
 
-        # 2026-08-25 추가: config_head(L_M,phi)도 지금까지 seg/s/force와 달리 합성-val로만
-        # 검증하고 실측 홀드아웃 검증이 빠져있었음 - 힘 추정 때 겪은 것과 같은 종류의 맹점이라
-        # 똑같이 채움.
-        for i, name in enumerate(config_names):
-            pred_i, true_i = r_config_phys[:, i], real_c_arr[:, i]
-            ss_res = np.sum((pred_i - true_i) ** 2)
-            ss_tot = np.sum((true_i - true_i.mean()) ** 2)
-            r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-            unit = "mm" if name == "L_M_mm" else "deg"
-            print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.2f}{unit} "
-                  f"(합성-val 기준 R^2={r2_score(val_c_phys[:, i], val_config_pred_phys[:, i]):.3f}와 비교할 것)")
+            # 2026-08-25 추가: config_head(L_M,phi)도 지금까지 seg/s/force와 달리 합성-val로만
+            # 검증하고 실측 홀드아웃 검증이 빠져있었음 - 힘 추정 때 겪은 것과 같은 종류의 맹점이라
+            # 똑같이 채움.
+            for i, name in enumerate(config_names):
+                pred_i, true_i = r_config_phys[:, i], real_c_arr[:, i]
+                ss_res = np.sum((pred_i - true_i) ** 2)
+                ss_tot = np.sum((true_i - true_i.mean()) ** 2)
+                r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+                unit = "mm" if name == "L_M_mm" else "deg"
+                print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.2f}{unit}")
 
-        # 2026-08-27 추가: 실측 홀드아웃에서도 하이브리드(분류+회귀) L_M이 순수 회귀보다
-        # 나은지 확인 - 이게 진짜 판단 기준(합성-val은 순환검증이라 참고용일 뿐).
-        hybrid_lm_report(r_lm_zero_pred, r_config_phys[:, 0], real_c_arr[:, 0], "실측 홀드아웃")
+            # 2026-08-27 추가: 실측 홀드아웃에서도 하이브리드(분류+회귀) L_M이 순수 회귀보다
+            # 나은지 확인 - 이게 진짜 판단 기준(합성-val은 순환검증이라 참고용일 뿐).
+            hybrid_lm_report(r_lm_zero_pred, r_config_phys[:, 0], real_c_arr[:, 0], f"{label} 실측 홀드아웃")
+
+        evaluate_real("1단계(기존 파이프라인, 파인튜닝 전)")
+
+        # ============================================================
+        # 2026-09-07 신규 2단계: 실측 FEA(fit_rows, holdout 제외) 직접 파인튜닝.
+        # 지금까지 최종 CNN은 150k 합성데이터로만 학습되고 실측은 검증에만 쓰였음 - 실측
+        # 데이터가 gradient를 한 번도 직접 업데이트한 적이 없었다는 뜻. surrogate라는 병목을
+        # 거치지 않고 실측을 직접 보여주는 "pretrain(합성) -> finetune(실측)" 2단계 시도.
+        # |phi|>=90 실측 샘플은 오버샘플링해서 Fx_board 고각도 문제에 더 집중시킴.
+        # (PROJECT_STATUS.md 20/23번 참고 - HIGH_PHI_WEIGHT 손실가중치 레버는 이미 실패했고,
+        # 이건 배치 구성 자체를 바꾸는 다른 메커니즘이라 별도로 시도해볼 가치가 있음.)
+        # ============================================================
+        FINETUNE_ON_REAL = int(os.environ.get("FINETUNE_ON_REAL", 1))
+        if FINETUNE_ON_REAL:
+            ft_X, ft_y, ft_f, ft_s, ft_c = rows_to_arrays(fit_rows)
+            if len(ft_X) < 20:
+                print(f"\n2단계 파인튜닝 스킵: 실측 fit_rows 중 free-shape 계산 성공이 "
+                      f"{len(ft_X)}개뿐(20개 미만)")
+            else:
+                ft_X = np.array(ft_X, dtype=np.float32)
+                ft_X_norm = (ft_X - X_mean2) / X_std2
+                ft_y_arr = np.array(ft_y)
+                ft_f_arr = np.array(ft_f, dtype=np.float32)
+                ft_f_norm = (ft_f_arr - f_mean) / f_std
+                ft_s_arr = np.array(ft_s, dtype=np.float32)
+                ft_s_norm = (ft_s_arr - s_mean) / s_std
+                ft_c_arr = np.array(ft_c, dtype=np.float32)
+                ft_c_norm = (ft_c_arr - c_mean) / c_std
+                ft_lm_zero = (np.abs(ft_c_arr[:, 0]) < LM_ZERO_THRESHOLD_MM).astype(np.float32)
+                ft_phi_weight = np.where(np.abs(ft_c_arr[:, 1]) >= 90, HIGH_PHI_WEIGHT, 1.0).astype(np.float32)
+                ft_s_weight = s_spatial_weight(ft_s_arr).astype(np.float32)
+
+                high_phi_mask = np.abs(ft_c_arr[:, 1]) >= 90
+                FT_OVERSAMPLE = int(os.environ.get("FT_OVERSAMPLE", 4))
+                base_idx = np.arange(len(ft_X))
+                oversample_idx = np.concatenate(
+                    [base_idx, np.repeat(base_idx[high_phi_mask], max(0, FT_OVERSAMPLE - 1))])
+                print(f"\n2단계 파인튜닝 데이터: 실측 fit_rows {len(ft_X)}개 "
+                      f"(|phi|>=90: {int(high_phi_mask.sum())}개, {FT_OVERSAMPLE}배 오버샘플링 후 "
+                      f"배치풀 {len(oversample_idx)}개)")
+
+                ft_tensors = [torch.tensor(ft_X_norm[:, None]).float(), torch.tensor(ft_y_arr).long(),
+                              torch.tensor(ft_f_norm).float(), torch.tensor(ft_s_norm).float(),
+                              torch.tensor(ft_c_norm).float(), torch.tensor(ft_phi_weight).float(),
+                              torch.tensor(ft_lm_zero).float(), torch.tensor(ft_s_weight).float()]
+                ft_dataset = TensorDataset(*[t[oversample_idx] for t in ft_tensors])
+                FT_EPOCHS = int(os.environ.get("FT_EPOCHS", 15))
+                FT_LR = float(os.environ.get("FT_LR", 5e-5))  # 기존 lr(1e-3)의 1/20 - 150k 합성
+                # 데이터로 배운 일반 표현은 유지하고 미세보정만(오래 돌리면 fit_rows가
+                # 400여개뿐이라 바로 과적합됨 - epoch도 짧게).
+                ft_loader = DataLoader(ft_dataset, batch_size=16, shuffle=True)
+                ft_optimizer = optim.Adam(model.parameters(), lr=FT_LR, weight_decay=1e-4)
+
+                model.train()
+                for ft_epoch in range(FT_EPOCHS):
+                    for bx, by, bf, bs, bc, bw, blz, bsw in ft_loader:
+                        bx, by, bf, bs, bc, bw, blz, bsw = (
+                            bx.to(device), by.to(device), bf.to(device), bs.to(device),
+                            bc.to(device), bw.to(device), blz.to(device), bsw.to(device))
+                        ft_optimizer.zero_grad()
+                        seg_logits, force_pred, s_pred, config_pred, lm_zero_logit = model(bx)
+                        loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
+                                + weighted_s_loss(s_pred, bs, bsw) + config_criterion(config_pred, bc)
+                                + lm_zero_criterion(lm_zero_logit, blz))
+                        loss.backward()
+                        ft_optimizer.step()
+                print(f"2단계 파인튜닝 완료 ({FT_EPOCHS} epoch, lr={FT_LR})")
+                evaluate_real("2단계(실측 파인튜닝 후, 신규)")
+                print("\n※ 위 1단계 vs 2단계 수치를 직접 비교해서 파인튜닝이 실제로 도움이 "
+                      "됐는지 판단할 것 - 특히 |phi|>=90 Fx_board R^2(기준값 0.355)와 "
+                      "s>=60mm MAE(기준값 9.49mm). 도움 안 되면 FINETUNE_ON_REAL=0으로 꺼서 "
+                      "1단계 체크포인트로 되돌릴 것.")
+        else:
+            print("\n2단계 파인튜닝 스킵됨 (FINETUNE_ON_REAL=0)")
 
     os.makedirs(MODELS_DIR, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "X_mean": X_mean2, "X_std": X_std2,
