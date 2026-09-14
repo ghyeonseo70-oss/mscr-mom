@@ -678,15 +678,26 @@ if __name__ == "__main__":
                 ss_tot = np.sum((real_f_arr[:, i] - real_f_arr[:, i].mean()) ** 2)
                 r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
                 print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(r_force_phys[:, i] - real_f_arr[:, i]))*1000:.4f}mN")
-                # Fx_board(=force_names[0])는 |phi|>=90 구간만 따로도 확인 - 20/23번에서
-                # 계속 추적해온 구간(재튜닝 전 기준값 R^2=0.355).
+                # Fx_board(=force_names[0])는 |phi|>=90 vs |phi|<90 구간을 나눠서도 확인 -
+                # 20/23번에서 계속 추적해온 구간(재튜닝 전 기준값 R^2=0.355).
+                # 2026-09-14 발견(산점도 diff 확인 중): R^2만 보면 |phi|>=90이 훨씬 나빠
+                # 보이는데, MAE(절대오차)로 보면 두 구간이 거의 동일함(예: 0.0047 vs
+                # 0.0050mN) - |phi|>=90은 정답 값 자체의 분산이 작아서(실제값 표준편차
+                # 0.014 vs 0.022mN) R^2 계산식(1-잔차/분산)이 구조적으로 불리하게 나오는
+                # 통계적 함정일 가능성이 큼. **"고각도가 특별히 못 배운다"는 결론은 R^2만
+                # 보고 오판한 것일 수 있어, 이후로는 R^2와 MAE를 항상 같이 보고 MAE로
+                # 판단할 것.**
                 if i == 0:
-                    hp_mask = np.abs(real_c_arr[:, 1]) >= 90
-                    if hp_mask.sum() >= 3:
-                        ss_res_hp = np.sum((r_force_phys[hp_mask, i] - real_f_arr[hp_mask, i]) ** 2)
-                        ss_tot_hp = np.sum((real_f_arr[hp_mask, i] - real_f_arr[hp_mask, i].mean()) ** 2)
-                        r2_hp = 1 - ss_res_hp / ss_tot_hp if ss_tot_hp > 0 else float("nan")
-                        print(f"    |phi|>=90(n={int(hp_mask.sum())}) R^2={r2_hp:.3f} (기준값 0.355와 비교할 것)")
+                    for label, mask in [("|phi|<90", np.abs(real_c_arr[:, 1]) < 90),
+                                         ("|phi|>=90", np.abs(real_c_arr[:, 1]) >= 90)]:
+                        if mask.sum() >= 3:
+                            ss_res_m = np.sum((r_force_phys[mask, i] - real_f_arr[mask, i]) ** 2)
+                            ss_tot_m = np.sum((real_f_arr[mask, i] - real_f_arr[mask, i].mean()) ** 2)
+                            r2_m = 1 - ss_res_m / ss_tot_m if ss_tot_m > 0 else float("nan")
+                            mae_m = np.mean(np.abs(r_force_phys[mask, i] - real_f_arr[mask, i])) * 1000
+                            std_m = real_f_arr[mask, i].std() * 1000
+                            print(f"    {label}(n={int(mask.sum())}) R^2={r2_m:.3f}, MAE={mae_m:.4f}mN "
+                                  f"(실제값표준편차={std_m:.4f}mN, 기준값: R^2=0.355/0.720, MAE는 25/26번 로그 참고)")
 
         evaluate_real("1단계(기존 파이프라인, 파인튜닝 전)")
 
