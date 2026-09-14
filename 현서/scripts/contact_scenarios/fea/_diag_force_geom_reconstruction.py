@@ -16,7 +16,11 @@ import sys
 import numpy as np
 import torch
 import torch.nn as nn
+import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
+
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FEA_DATA_DIR = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios", "fea")
@@ -226,3 +230,34 @@ for label, mask in [("|phi|<90", np.abs(phi_true) < 90), ("|phi|>=90", np.abs(ph
     mae_r = np.abs(fx_board_recon[m] - real_fy_true[m]).mean() * 1000
     print(f"  {label}(n={int(m.sum())}): 직접회귀 R^2={r2_d:.3f}/MAE={mae_d:.4f}mN  ->  "
           f"재구성 R^2={r2_r:.3f}/MAE={mae_r:.4f}mN")
+
+# ---- 산점도: 직접회귀 vs 기하학 재구성, 나란히 비교 ----
+high_phi = np.abs(phi_true) >= 90
+fig, axes = plt.subplots(1, 2, figsize=(11.5, 5.2))
+panels = [
+    ("Fx_board 직접회귀 (mN)", fx_board_pred_direct * 1000),
+    ("Fx_board 기하학 재구성 (mN)", fx_board_recon * 1000),
+]
+true_mn = real_fy_true * 1000
+for ax, (name, pred_v) in zip(axes, panels):
+    r2 = r2_score(true_mn, pred_v)
+    lo, hi = min(true_mn.min(), pred_v.min()), max(true_mn.max(), pred_v.max())
+    pad = (hi - lo) * 0.05
+    ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "r--", linewidth=1.2, label="y=x(완벽예측)")
+    ax.scatter(true_mn[~high_phi], pred_v[~high_phi], s=45, alpha=0.7, color="#8E44AD",
+               edgecolor="black", linewidth=0.3, label="|phi|<90")
+    ax.scatter(true_mn[high_phi], pred_v[high_phi], s=55, alpha=0.85, color="black",
+               marker="x", label="|phi|>=90")
+    ax.set_xlabel("실제 Fx_board (mN, FEA 정답)")
+    ax.set_ylabel(f"예측 {name}")
+    ax.set_title(f"{name}\nR²={r2:.3f} (n={len(true_mn)})", fontweight="bold", fontsize=12)
+    ax.legend(fontsize=8, loc="upper left")
+    ax.grid(True, linestyle=":", alpha=0.4)
+
+fig.suptitle("2026-09-14: Fx_board 직접회귀 vs 기하학 재구성(known L_M/phi + 예측 s로 θ 계산)\n"
+             "실측 홀드아웃(n=99)", fontweight="bold", fontsize=13, y=1.05)
+plt.tight_layout()
+out_path = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios",
+                         "fea", "force_geom_reconstruction_scatter_0914.png")
+plt.savefig(out_path, dpi=140, bbox_inches="tight")
+print("\n저장:", out_path)
