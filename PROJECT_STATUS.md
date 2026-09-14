@@ -8,6 +8,34 @@ MSCR-MOM(자기 연성 카테터 로봇) 논문(Park et al., IEEE RA-L 2024) 재
 
 ## 🎯 지금 할 일 (우선순위 순)
 
+**🔜 2026-09-14(27번, 신규) |phi|>=90 Fx_board 전용 - "실패한 조합만 재시도" 스크립트
+작성 완료, 실행은 다른 컴퓨터에서 할 것.** 23번에서 "급하게 손대지 말 것"이라 미뤄뒀던
+접근을 이제 구현함: `retry_highphi_missing_matv2.py`(신규) - 목표 격자(유효조합 42개 x
+s 19개=798개, `run_highphi_sdensify_matv2_sweep.sh`와 동일한 LM_LIST/PHI_LIST/BAD_COMBOS
++ 기존 s격자와 오프셋격자 합집합)에서 **아직 실측 데이터가 없는 (L_M,phi,s) 조합을
+데이터 파일에서 직접 계산**해서 뽑아낸 뒤, 기본 자동감쇠(stabilize=True, 이미 실패한
+설정) 대신 **명시적 STABILIZE 계수(`--stabilize`, 기본 0.01)로 재시도**함.
+
+**현재 확인된 숫자(이 컴퓨터 기준)**: 798개 목표 중 **기존 성공 265개, 재시도 대상
+533개**. 케이스 하나에 약 15~20분 걸려서(스레드4개), 533개 전부 돌리면 100시간 넘음 -
+**`--max-attempts`로 이번 실행에서 시도할 개수를 제한**하도록 만들어둠(예: 100개=하룻밤
+분량). 이미 성공한 건 재계산 시 자동으로 빠지므로, 여러 번에 나눠 돌려도 체크포인트
+관리 없이 이어서 하면 됨.
+
+**다른 컴퓨터에서 실행**:
+```bash
+git pull origin main
+cd 현서/scripts/contact_scenarios/fea
+python retry_highphi_missing_matv2.py --dry-run              # 먼저 목표/누락 개수만 확인
+python retry_highphi_missing_matv2.py --max-attempts 100     # 실제 재시도 (하룻밤 분량 예시)
+```
+**주의(Windows+conda 환경)**: `ccx`가 PATH에 없으면 죽으니 먼저
+`C:\<conda경로>\Library\bin` 등을 PATH에 추가할 것(아래 "환경" 섹션 참고). 완료되면
+`train_segment_classifier_singleprobe_beta0180_4seg.py` 재학습 후 `_diag_holdout_phi_breakdown.py`
+로 |phi|>=90 Fx_board(기준값 0.440, 25/26번 참고)가 개선됐는지 확인할 것. STABILIZE=0.01이
+효과 없으면 `--stabilize` 값을 0.002~0.05 사이에서 바꿔가며 재시도해볼 것(아직 검증 안 된
+값, 임의로 고름).
+
 **✅ 2026-09-14(26번) FORCE_LOSS_WEIGHTS 재검증 — 폐기, 원래(0.1)로 복귀.** 25번 체크포인트의
 대체모델 5-fold R^2를 보니 Fy_total_N(=Fx_board)이 2026-08-19 당시 진단(-0.01, 노이즈)과
 달리 이제 0.649로 나옴(데이터가 그동안 518개로 늘어서) — "노이즈라 못 배운다"는 옛 전제로
@@ -644,6 +672,19 @@ conda install -c conda-forge calculix
 GPU 있으면 15만개 합성+CNN 학습 전체 ~25~110분(GPU 사양에 따라 다름, RTX 5080에서 24.3분
 전례 있음). 이 컴퓨터(문서 정리한 컴퓨터)는 CPU-only라 오래 걸림 — 가능하면 GPU 컴퓨터에서
 재학습 실행 권장.
+
+**⚠️ Windows+conda에서 `ccx`(CalculiX) PATH 문제 (2026-09-14 발견)**: conda로 설치하면
+`ccx.exe`가 `<conda경로>\Library\bin\`에 생기는데, 이게 기본 PATH에 없어서 `run_contact.py`의
+`subprocess.run(["ccx", ...])`가 "파일을 찾을 수 없음"으로 실패함. FEA 스크립트 실행 전에
+PowerShell에서:
+```powershell
+$env:PATH = "<conda경로>;<conda경로>\Library\mingw-w64\bin;<conda경로>\Library\usr\bin;<conda경로>\Library\bin;<conda경로>\Scripts;$env:PATH"
+```
+(mingw-w64\bin에 ccx가 필요로 하는 런타임 DLL이 있어서 Library\bin만으론 부족함 -
+DLL_NOT_FOUND로 죽었었음). 추가로 `run_contact.py`/`sweep_lm_phi_position_matv2_worker.py`의
+`subprocess.run`에 `encoding="utf-8", errors="replace"`를 명시해둠 - 한글 로캘(cp949)
+Windows에서 ccx 출력에 cp949로 못 읽는 바이트가 섞여 있으면 UnicodeDecodeError로 죽던
+버그였음(2026-09-14 수정 완료, 커밋됨).
 
 ---
 
