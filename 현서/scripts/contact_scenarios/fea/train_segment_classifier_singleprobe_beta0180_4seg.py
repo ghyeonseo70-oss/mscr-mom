@@ -1,9 +1,9 @@
 """train_segment_classifier_singleprobe_4seg.py 기반 + 교수님 피드백 반영판.
 
-교수님 지시: 멀티프로브(3개/11개)는 그만두고 단일 관측 유지. beta(원주각)를 0도/180도
+beta(원주각)를 0도/180도
 두 값으로만 제한(실험 조건 단순화). phi/L_M은 그대로 예측 대상 유지(빼지 말 것 - 처음에
-phi를 0/180으로 제한하고 phi/L_M 예측도 빼는 걸로 잘못 이해했다가 정정함). 힘/위치도
-그대로 유지. "기구학적으로 풀고 다이나믹한 건 하지 말라"는 지시는 이미 만족됨 -
+phi를 0/180으로 제한하고 phi/L_M 예측도 빼는 걸로 잘못 이해했다가 정정함). 
+힘/위치도 그대로 유지. "기구학적으로 풀고 다이나믹한 건 하지 말라"는 지시는 이미 만족됨 -
 force_model.py의 solve_shape()는 원래부터 정역학/기구학 모델.
 
 원본(train_segment_classifier_singleprobe_4seg.py) 대비 유일한 차이:
@@ -44,15 +44,9 @@ TARGETS = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_uz_avg_mm", "tip_theta_deg_boa
 # 새 데이터부터는 이 값을 그대로 쓰고, 없는 옛 데이터는 하위호환을 위해 frac 근사로 대체.
 MOM_TARGETS_MISSING_OLD_DATA = ["mom_ux_avg_mm", "mom_uy_avg_mm", "mom_uz_avg_mm", "mom_theta_deg_board"]
 
-# 2026-08-27 추가: L_M=0 근처는 "0인지 아닌지 분류"는 99.3% 정확도로 완벽한데(
-# _diag_lm_multivariate_identifiability.py) "정확히 몇 mm인지 연속 회귀"만 실패하는 게
-# 확인됨(L_M=0 MAE=26~32mm, L_M!=0은 R^2=0.93+로 훌륭) - 신호의 L_M 민감도(기울기)가
-# L_M=0 근처에서 극단적으로 작아서(L_M=0->2.5mm 신호변화가 L_M=40->60mm의 1/20 수준)
-# 회귀만 정밀하게 못 맞추는 것으로 추정. 그래서 config_head(연속 회귀) 하나로 다 처리하는
-# 대신, "L_M<THRESHOLD인가"를 분류로 먼저 걸러내는 lm_zero_head를 추가 - 실측 격자점이
-# 0, 12.5, 25...mm(12.5mm 간격)라 그 중간값(6.25mm)을 경계로 씀. 이 경계 미만은
-# 회귀값을 안 믿고 대표값(0mm)으로 보고, 그 이상만 기존 config_head 회귀를 그대로 신뢰.
-LM_ZERO_THRESHOLD_MM = 6.25
+# (예전엔 여기에 L_M=0 근처 연속회귀 실패 문제를 우회하는 lm_zero_head/LM_ZERO_THRESHOLD_MM가
+# 있었음 - 2026-09-11에 L_M을 아예 예측 대상에서 빼고 known input으로 바꾸면서 그 우회
+# 자체가 필요 없어져 제거함. 자세한 배경은 SingleProbeClassifier 클래스 docstring 참고.)
 DEFAULTS = {"L_M_mm": 50.0, "phi_deg": 60.0, "beta_deg": 0.0}
 
 BIN_WIDTH_MM = 20.0
@@ -217,10 +211,19 @@ def worker(args):
 
 
 class SingleProbeClassifier(nn.Module):
-    """구간분류(4-class) + 힘(Fx,Fy 보드좌표계) + 연속값 s(보조회귀) + L_M,phi(액추에이터
-    슬랙 보정용) + L_M≈0 이진분류(2026-08-27 추가, 아래 lm_zero_head 참고) 동시 예측 -
-    프로브 1개, beta는 0도/180도로 한정."""
-    def __init__(self, n_probes=N_PROBES, n_classes=N_CLASSES, n_force=2, n_config=2):
+    """구간분류(4-class) + 힘(Fx,Fy 보드좌표계) + 연속값 s(보조회귀) 예측 - 프로브 1개,
+    beta는 0도/180도로 한정.
+
+    2026-09-11 변경(교수님 피드백): L_M, phi는 더 이상 예측 대상이 아니라 네트워크
+    입력으로 직접 받음. 둘 다 B-field에서 추정해야 할 미지수가 아니라 이미 아는 값 -
+    phi는 조종자가 거는 외부자기장 방향(제어입력), L_M은 그 로봇의 고정된 MOM 위치
+    스펙(하드웨어 상수). 이전엔 이 둘을 config_head로 "예측"하게 시켰는데, 그 예측오차가
+    힘 성분 중 하나(Fx_board=F_mag*sinθ, θ는 L_M/phi의 비선형 함수)의 정확도를 깎아먹는
+    원인으로 확인됨(_diag_force_geom_reconstruction.py: 예측 L_M/phi로 재구성 R^2=-0.35
+    vs 진짜 L_M/phi로 재구성 R^2=0.75). L_M=0 근처 회귀가 불안정해서 넣었던 lm_zero_head도
+    L_M을 더 이상 추정할 필요가 없어지면서 같이 제거됨(L_M=0 문제 자체가 사라짐).
+    진짜 미지수(센서로 알아내야 하는 값)는 접촉위치(s)와 접촉힘(Fx,Fy)뿐."""
+    def __init__(self, n_probes=N_PROBES, n_classes=N_CLASSES, n_force=2, n_config_in=2):
         super().__init__()
         self.n_probes = n_probes
         self.encoder = nn.Sequential(
@@ -229,23 +232,17 @@ class SingleProbeClassifier(nn.Module):
             nn.Flatten(), nn.Linear(32 * 5 * 5, 64), nn.ReLU(),
         )
         self.trunk = nn.Sequential(
-            nn.Linear(64 * n_probes, 128), nn.BatchNorm1d(128), nn.ReLU(), nn.Dropout(0.3),
+            nn.Linear(64 * n_probes + n_config_in, 128), nn.BatchNorm1d(128), nn.ReLU(), nn.Dropout(0.3),
         )
         self.seg_head = nn.Linear(128, n_classes)
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
-        self.config_head = nn.Linear(128, n_config)
-        # 2026-08-27 추가: L_M을 연속 회귀 하나로만 처리하면 L_M=0 근처에서 정밀도가
-        # 무너지는 게 확인됨(_diag_lm_multivariate_identifiability.py) - "L_M<임계값인가"만
-        # 따로 분류하는 작은 헤드를 추가. 이 분류 자체는 99.3% 정확도로 검증된 쉬운
-        # 문제라 1개 선형층으로 충분.
-        self.lm_zero_head = nn.Linear(128, 1)
 
-    def forward(self, x):
+    def forward(self, x, config):
+        """config: 정규화된 (L_M_mm, phi_deg) - 이미 아는 값, B-field와 함께 trunk에 들어감."""
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
-        h = self.trunk(torch.cat(embeds, dim=1))
-        return (self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.config_head(h),
-                self.lm_zero_head(h).squeeze(-1))
+        h = self.trunk(torch.cat(embeds + [config], dim=1))
+        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1)
 
 
 if __name__ == "__main__":
@@ -358,9 +355,6 @@ if __name__ == "__main__":
     s_all = np.concatenate([r[3] for r in results], axis=0)
     c_all = np.concatenate([r[4] for r in results], axis=0)
     n_rejected_total = sum(r[5] for r in results)
-    # 2026-08-27 추가: lm_zero_head용 이진 라벨 - L_M(c_all[:,0])만으로 결정되는 단순
-    # 함수라 worker()를 안 건드리고 여기서 한 번에 계산.
-    lm_zero_all = (np.abs(c_all[:, 0]) < LM_ZERO_THRESHOLD_MM).astype(np.float32)
     s_weight_all = s_spatial_weight(s_all).astype(np.float32)
     print(f"s 공간가중치(s={S_WEIGHT_RAMP_START_MM:.0f}mm부터 {S_WEIGHT_RAMP_END_MM:.0f}mm까지 "
           f"최대 {S_WEIGHT_MAX}배 램프): 평균={s_weight_all.mean():.2f}, "
@@ -421,12 +415,13 @@ if __name__ == "__main__":
 
     N_EPOCHS = int(os.environ.get("N_EPOCHS", 60))
 
+    # c_norm(정규화된 L_M,phi)은 더 이상 학습 타겟이 아니라 model.forward()의 두 번째
+    # 입력(known config)으로 씀 - DataLoader 텐서 순서/이름은 그대로 두되 역할만 바뀜.
     train_loader = DataLoader(
         TensorDataset(torch.tensor(X_norm[train_idx]).float(), torch.tensor(y_all[train_idx]).long(),
                       torch.tensor(f_norm[train_idx]).float(), torch.tensor(s_norm[train_idx]).float(),
                       torch.tensor(c_norm[train_idx]).float(),
                       torch.tensor(phi_weight_all[train_idx]).float(),
-                      torch.tensor(lm_zero_all[train_idx]).float(),
                       torch.tensor(s_weight_all[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
@@ -435,10 +430,9 @@ if __name__ == "__main__":
     val_f_phys = f_all[val_idx]
     val_s = torch.tensor(s_norm[val_idx]).float().to(device)
     val_s_phys = s_all[val_idx]
-    val_c = torch.tensor(c_norm[val_idx]).float().to(device)
+    val_c = torch.tensor(c_norm[val_idx]).float().to(device)  # known L_M,phi 입력(정규화)
     val_c_phys = c_all[val_idx]
     val_phi_weight = torch.tensor(phi_weight_all[val_idx]).float().to(device)
-    val_lm_zero = torch.tensor(lm_zero_all[val_idx]).float().to(device)
     val_s_weight = torch.tensor(s_weight_all[val_idx]).float().to(device)
 
     # 2026-08-26 추가: 여기까지 최종 CNN(SingleProbeClassifier) 학습에는 시드 고정이 전혀
@@ -454,18 +448,24 @@ if __name__ == "__main__":
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
-    config_criterion = nn.MSELoss()
-    lm_zero_criterion = nn.BCEWithLogitsLoss()
-    # 2026-08-19 비판적 리뷰 #1: 대체모델 5-fold R^2가 Fy_total_N=-0.01(사실상 노이즈, 평균보다도
-    # 못 맞춤)이라 이걸 "정답"으로 그대로 학습시키면 CNN이 서로게이트의 노이즈를 따라 배움.
-    # 완전히 빼는 대신(F_mag=sqrt(Fx^2+Fy^2) 유도 로직이 Fx,Fy 둘 다 필요해서 구조를 안 바꿔도
-    # 되게) 가중치를 1/10로 낮춰 신뢰 못 할 타겟이 학습을 왜곡하는 걸 줄임.
+    # 2026-08-19 비판적 리뷰 #1 (2026-09-14 재검토): 그 시점엔 대체모델 5-fold R^2가
+    # Fy_total_N=-0.01(노이즈)이라 이 축 loss를 1/10로 깎았었음. 그 이후 데이터가 늘어서
+    # (지금 518개) 같은 진단이 R^2=0.649로 나와 "노이즈라 못 배운다"는 전제가 깨졌길래
+    # 0.1/0.5/1.0 세 값으로 재검증(시드43, 파인튜닝 없음, 0.5/1.0은 단일 실행):
+    #   0.1: balanced acc 83.0%, |phi|>=90 Fx_board 0.440, Fy_board 0.855 (기존, 시드2개 교차검증됨)
+    #   0.5: balanced acc 83.1%, |phi|>=90 Fx_board 0.477, Fy_board 0.673
+    #   1.0: balanced acc 86.3%, |phi|>=90 Fx_board 0.382, Fy_board 0.704
+    # 가중치를 올릴수록 목표(|phi|>=90 Fx_board)가 항상 좋아지는 것도 아니고(0.5>0.1>1.0,
+    # 단조 아님), 대신 Fy_board(원래 제일 안정적이던 축)는 계속 나빠짐 - trunk 공유로 인한
+    # 멀티태스크 트레이드오프. 0.5/1.0은 시드 1개뿐이라 이 파이프라인에서 이미 확인된 시드
+    # 노이즈 폭(Fy_board가 같은 세팅에서도 0.608~0.855까지 흔들림) 안에 들어갈 수 있어 신뢰
+    # 못 함. **결론: 가중치 튜닝은 여기서 폐기, 0.1(시드 2개로 검증된 유일한 설정)로 복귀.
+    # |phi|>=90 문제는 loss weight가 아니라 그 구간 실측 FEA를 더 모으는 원래 처방으로.**
     # ⚠️ 열 순서 주의: fb/fxy_all은 [Fy_total_N(로컬), Fx_total_N(로컬)] 순서로 저장됨(위
-    # worker()의 "축교환" 주석 - 보드좌표계 90도 회전 때문). 즉 0번 열이 R^2=-0.01인
-    # Fy_total_N(로컬)이고, 이게 나중에 force_names=["Fx_board_N","Fy_board_N"]로 "표시"만
-    # 될 뿐 실제 학습 순서는 그대로임 - 가중치를 반대로 넣으면 정작 나쁜 타겟이 그대로 살아있는
-    # 채로 고친 척하게 됨.
-    FORCE_LOSS_WEIGHTS = torch.tensor([0.1, 1.0], device=device)  # [Fy_total_N(로컬,나쁨), Fx_total_N(로컬,좋음)]
+    # worker()의 "축교환" 주석 - 보드좌표계 90도 회전 때문). 즉 0번 열이 Fy_total_N(로컬)이고,
+    # 이게 나중에 force_names=["Fx_board_N","Fy_board_N"]로 "표시"만 될 뿐 실제 학습 순서는
+    # 그대로임 - 가중치를 반대로 넣으면 정작 고치려는 축이 아닌 다른 축을 건드리게 됨.
+    FORCE_LOSS_WEIGHTS = torch.tensor([0.1, 1.0], device=device)  # [Fy_total_N(로컬,=Fx_board), Fx_total_N(로컬,=Fy_board)]
 
     def weighted_force_loss(pred, true, sample_weight=None):
         per_sample = (((pred - true) ** 2) * FORCE_LOSS_WEIGHTS).mean(dim=1)
@@ -482,29 +482,26 @@ if __name__ == "__main__":
     best_epoch = -1
     for epoch in range(N_EPOCHS):
         model.train()
-        for bx, by, bf, bs, bc, bw, blz, bsw in train_loader:
-            bx, by, bf, bs, bc, bw, blz, bsw = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                                                 bc.to(device), bw.to(device), blz.to(device), bsw.to(device))
+        for bx, by, bf, bs, bc, bw, bsw in train_loader:
+            bx, by, bf, bs, bc, bw, bsw = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
+                                            bc.to(device), bw.to(device), bsw.to(device))
             optimizer.zero_grad()
-            seg_logits, force_pred, s_pred, config_pred, lm_zero_logit = model(bx)
+            seg_logits, force_pred, s_pred = model(bx, bc)
             loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                    + weighted_s_loss(s_pred, bs, bsw) + config_criterion(config_pred, bc)
-                    + lm_zero_criterion(lm_zero_logit, blz))
+                    + weighted_s_loss(s_pred, bs, bsw))
             loss.backward()
             optimizer.step()
         model.eval()
         with torch.no_grad():
-            val_seg_logits, val_force_pred, val_s_pred, val_config_pred, val_lm_zero_logit = model(val_X)
+            val_seg_logits, val_force_pred, val_s_pred = model(val_X, val_c)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
             val_force_loss = weighted_force_loss(val_force_pred, val_f, val_phi_weight).item()
             val_s_loss = weighted_s_loss(val_s_pred, val_s, val_s_weight).item()
-            val_config_loss = config_criterion(val_config_pred, val_c).item()
-            val_lm_zero_acc = (((val_lm_zero_logit > 0).float() == val_lm_zero).float().mean().item())
             val_pred_epoch = val_seg_logits.argmax(dim=1)
             val_acc = (val_pred_epoch == val_y).float().mean().item()
-            # 2026-08-19 비판적 리뷰 #4: 체크포인트를 "4개 손실 단순합" 대신 실제 목표인
+            # 2026-08-19 비판적 리뷰 #4: 체크포인트를 "손실 단순합" 대신 실제 목표인
             # 구간분류 balanced accuracy(클래스별 recall 평균) 기준으로 고름 - 손실 스케일이
-            # 서로 다른 4개 태스크를 더한 값이 우연히 낮다고 해서 분류 성능이 최선이란 보장이
+            # 서로 다른 태스크를 더한 값이 우연히 낮다고 해서 분류 성능이 최선이란 보장이
             # 없었음.
             conf_epoch = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
             for t, p in zip(val_y.tolist(), val_pred_epoch.tolist()):
@@ -516,18 +513,16 @@ if __name__ == "__main__":
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             best_epoch = epoch + 1
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ConfigLoss {val_config_loss:.4f}  LMZeroAcc {val_lm_zero_acc*100:5.1f}%")
+            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}")
     print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (balanced accuracy 기준, {best_bal_acc*100:.1f}%)")
 
     model.load_state_dict(best_state)
     model.eval()
     with torch.no_grad():
-        val_seg_logits, val_force_pred, val_s_pred, val_config_pred, val_lm_zero_logit = model(val_X)
+        val_seg_logits, val_force_pred, val_s_pred = model(val_X, val_c)
         val_pred = val_seg_logits.argmax(dim=1)
         val_force_pred_phys = val_force_pred.cpu().numpy() * f_std + f_mean
         val_s_pred_phys = val_s_pred.cpu().numpy() * s_std + s_mean
-        val_config_pred_phys = val_config_pred.cpu().numpy() * c_std + c_mean
-        val_lm_zero_pred = (val_lm_zero_logit.cpu().numpy() > 0)
     final_acc = (val_pred == val_y).float().mean().item()
     conf = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
     for t, p in zip(val_y.tolist(), val_pred.tolist()):
@@ -566,32 +561,11 @@ if __name__ == "__main__":
     mae = np.mean(np.abs(pred_fmag - true_fmag_2d))
     print(f"  F_mag(유도): R^2={r2:.3f}, MAE={mae*1000:.4f}mN")
 
-    config_names = ["L_M_mm", "phi_deg"]
-    print(f"\n=== 로봇 형상(L_M, phi) 회귀 성능 (n_val={len(val_idx)}) ===")
-    for i, name in enumerate(config_names):
-        pred_i, true_i = val_config_pred_phys[:, i], val_c_phys[:, i]
-        ss_res = np.sum((pred_i - true_i) ** 2)
-        ss_tot = np.sum((true_i - true_i.mean()) ** 2)
-        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-        mae = np.mean(np.abs(pred_i - true_i))
-        unit = "mm" if name == "L_M_mm" else "deg"
-        print(f"  {name}: R^2={r2:.3f}, MAE={mae:.2f}{unit}")
-
-    # 2026-08-27 추가: lm_zero_head(L_M<임계값 이진분류) 성능 + "분류 후 회귀"로 L_M을
-    # 재구성했을 때(하이브리드) 순수 회귀보다 나은지 비교. 하이브리드 값 = 분류가 "0에
-    # 가깝다"고 하면 대표값 0mm, 아니면 기존 config_head 회귀값 그대로.
-    def hybrid_lm_report(lm_zero_pred_arr, lm_pred_arr, lm_true_arr, label):
-        true_zero = lm_true_arr < LM_ZERO_THRESHOLD_MM
-        zero_acc = (lm_zero_pred_arr == true_zero).mean()
-        hybrid = np.where(lm_zero_pred_arr, 0.0, lm_pred_arr)
-        ss_res_h = np.sum((hybrid - lm_true_arr) ** 2)
-        ss_tot_h = np.sum((lm_true_arr - lm_true_arr.mean()) ** 2)
-        r2_h = 1 - ss_res_h / ss_tot_h if ss_tot_h > 0 else float("nan")
-        mae_h = np.mean(np.abs(hybrid - lm_true_arr))
-        print(f"  [{label}] lm_zero_head 분류 정확도={zero_acc*100:.1f}% (임계값 {LM_ZERO_THRESHOLD_MM}mm) | "
-              f"하이브리드(분류+회귀) L_M: R^2={r2_h:.3f}, MAE={mae_h:.2f}mm (순수 회귀 위 수치와 비교할 것)")
-
-    hybrid_lm_report(val_lm_zero_pred, val_config_pred_phys[:, 0], val_c_phys[:, 0], "합성-val")
+    # 2026-09-11: L_M,phi는 더 이상 모델이 예측하는 값이 아니라 known input(config_names
+    # 순서로 val_c/val_c_phys에 그대로 들어있음)이라, 여기서 정확도를 "리포트"할 대상 자체가
+    # 없음(입력=정답이라 R^2가 항상 1). L_M=0 근처 회귀 불안정 문제(이전 lm_zero_head로
+    # 우회했던 것)도 L_M을 더 이상 추정하지 않으므로 자연히 사라짐.
+    config_names = ["L_M_mm", "phi_deg"]  # known input 순서 (체크포인트에 기록용)
 
     # 2026-08-19 비판적 리뷰 반영 #2: 지금까지의 val_* 지표는 전부 대체모델이 만든 합성데이터
     # 안에서만 도는 순환검증(같은 서로게이트의 가정을 재확인하는 것)이라, 대체모델 학습에서
@@ -663,6 +637,9 @@ if __name__ == "__main__":
         real_f_arr = np.array(real_f, dtype=np.float32)
         real_s_arr = np.array(real_s, dtype=np.float32)
         real_c_arr = np.array(real_c, dtype=np.float32)
+        # L_M,phi는 실측 FEA 행에도 이미 정답으로 들어있는 known input이라(예측할 필요
+        # 없음), 여기서 정규화해서 model.forward()의 config 입력으로 그대로 씀.
+        real_c_norm = (real_c_arr - c_mean) / c_std
 
         # 2026-09-07 리팩터: 아래 평가 블록을 함수로 뽑음 - 실측 파인튜닝(다음 블록) 전/후
         # 성능을 같은 홀드아웃으로 두 번 비교해야 해서 재사용이 필요해짐.
@@ -670,12 +647,11 @@ if __name__ == "__main__":
             model.eval()
             with torch.no_grad():
                 rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5)
-                r_seg_logits, r_force_pred, r_s_pred, r_config_pred, r_lm_zero_logit = model(rX)
+                rC = torch.tensor(real_c_norm).float().to(device)  # known L_M,phi 입력
+                r_seg_logits, r_force_pred, r_s_pred = model(rX, rC)
                 r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
                 r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
                 r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
-                r_config_phys = r_config_pred.cpu().numpy() * c_std + c_mean
-                r_lm_zero_pred = (r_lm_zero_logit.cpu().numpy() > 0)
 
             print(f"\n--- [{label}] 순수 실측 FEA 검증 (n={len(real_y_arr)}) ---")
             real_acc = float((r_pred_class == real_y_arr).mean())
@@ -712,21 +688,6 @@ if __name__ == "__main__":
                         r2_hp = 1 - ss_res_hp / ss_tot_hp if ss_tot_hp > 0 else float("nan")
                         print(f"    |phi|>=90(n={int(hp_mask.sum())}) R^2={r2_hp:.3f} (기준값 0.355와 비교할 것)")
 
-            # 2026-08-25 추가: config_head(L_M,phi)도 지금까지 seg/s/force와 달리 합성-val로만
-            # 검증하고 실측 홀드아웃 검증이 빠져있었음 - 힘 추정 때 겪은 것과 같은 종류의 맹점이라
-            # 똑같이 채움.
-            for i, name in enumerate(config_names):
-                pred_i, true_i = r_config_phys[:, i], real_c_arr[:, i]
-                ss_res = np.sum((pred_i - true_i) ** 2)
-                ss_tot = np.sum((true_i - true_i.mean()) ** 2)
-                r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
-                unit = "mm" if name == "L_M_mm" else "deg"
-                print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.2f}{unit}")
-
-            # 2026-08-27 추가: 실측 홀드아웃에서도 하이브리드(분류+회귀) L_M이 순수 회귀보다
-            # 나은지 확인 - 이게 진짜 판단 기준(합성-val은 순환검증이라 참고용일 뿐).
-            hybrid_lm_report(r_lm_zero_pred, r_config_phys[:, 0], real_c_arr[:, 0], f"{label} 실측 홀드아웃")
-
         evaluate_real("1단계(기존 파이프라인, 파인튜닝 전)")
 
         # ============================================================
@@ -753,8 +714,7 @@ if __name__ == "__main__":
                 ft_s_arr = np.array(ft_s, dtype=np.float32)
                 ft_s_norm = (ft_s_arr - s_mean) / s_std
                 ft_c_arr = np.array(ft_c, dtype=np.float32)
-                ft_c_norm = (ft_c_arr - c_mean) / c_std
-                ft_lm_zero = (np.abs(ft_c_arr[:, 0]) < LM_ZERO_THRESHOLD_MM).astype(np.float32)
+                ft_c_norm = (ft_c_arr - c_mean) / c_std  # known L_M,phi 입력(정규화)
                 ft_phi_weight = np.where(np.abs(ft_c_arr[:, 1]) >= 90, HIGH_PHI_WEIGHT, 1.0).astype(np.float32)
                 ft_s_weight = s_spatial_weight(ft_s_arr).astype(np.float32)
 
@@ -770,7 +730,7 @@ if __name__ == "__main__":
                 ft_tensors = [torch.tensor(ft_X_norm[:, None]).float(), torch.tensor(ft_y_arr).long(),
                               torch.tensor(ft_f_norm).float(), torch.tensor(ft_s_norm).float(),
                               torch.tensor(ft_c_norm).float(), torch.tensor(ft_phi_weight).float(),
-                              torch.tensor(ft_lm_zero).float(), torch.tensor(ft_s_weight).float()]
+                              torch.tensor(ft_s_weight).float()]
                 ft_dataset = TensorDataset(*[t[oversample_idx] for t in ft_tensors])
                 FT_EPOCHS = int(os.environ.get("FT_EPOCHS", 15))
                 FT_LR = float(os.environ.get("FT_LR", 5e-5))  # 기존 lr(1e-3)의 1/20 - 150k 합성
@@ -781,15 +741,14 @@ if __name__ == "__main__":
 
                 model.train()
                 for ft_epoch in range(FT_EPOCHS):
-                    for bx, by, bf, bs, bc, bw, blz, bsw in ft_loader:
-                        bx, by, bf, bs, bc, bw, blz, bsw = (
+                    for bx, by, bf, bs, bc, bw, bsw in ft_loader:
+                        bx, by, bf, bs, bc, bw, bsw = (
                             bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                            bc.to(device), bw.to(device), blz.to(device), bsw.to(device))
+                            bc.to(device), bw.to(device), bsw.to(device))
                         ft_optimizer.zero_grad()
-                        seg_logits, force_pred, s_pred, config_pred, lm_zero_logit = model(bx)
+                        seg_logits, force_pred, s_pred = model(bx, bc)
                         loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                                + weighted_s_loss(s_pred, bs, bsw) + config_criterion(config_pred, bc)
-                                + lm_zero_criterion(lm_zero_logit, blz))
+                                + weighted_s_loss(s_pred, bs, bsw))
                         loss.backward()
                         ft_optimizer.step()
                 print(f"2단계 파인튜닝 완료 ({FT_EPOCHS} epoch, lr={FT_LR})")
@@ -804,10 +763,11 @@ if __name__ == "__main__":
     os.makedirs(MODELS_DIR, exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "X_mean": X_mean2, "X_std": X_std2,
                 "f_mean": f_mean, "f_std": f_std, "s_mean": s_mean, "s_std": s_std,
+                # c_mean/c_std: 더 이상 예측 타겟 정규화용이 아니라 known input(L_M,phi)
+                # 정규화용 - config_names 순서대로 (L_M_mm, phi_deg).
                 "c_mean": c_mean, "c_std": c_std,
                 "bin_width_mm": BIN_WIDTH_MM, "n_classes": N_CLASSES, "phi_range": PHI_RANGE,
-                "beta_values": BETA_VALUES, "force_names": force_names, "config_names": config_names,
-                "lm_zero_threshold_mm": LM_ZERO_THRESHOLD_MM},
+                "beta_values": BETA_VALUES, "force_names": force_names, "config_names": config_names},
                os.path.join(MODELS_DIR, "position_segment_classifier_singleprobe_beta0180_4seg.pth"))
     print(f"\n저장: {MODELS_DIR}/position_segment_classifier_singleprobe_beta0180_4seg.pth")
     print(f"\n총 소요시간: {(time.time()-t_start)/60:.1f}분")

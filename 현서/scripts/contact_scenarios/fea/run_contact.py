@@ -161,7 +161,10 @@ def run_ccx(job_name="contact_test", timeout=600, n_threads=CCX_THREADS):
     env["OMP_NUM_THREADS"] = str(n_threads)
     try:
         result = subprocess.run(
-            ["ccx", job_name], capture_output=True, text=True, cwd=HERE, env=env, timeout=timeout
+            ["ccx", job_name], capture_output=True, text=True, cwd=HERE, env=env, timeout=timeout,
+            encoding="utf-8", errors="replace",
+            # 2026-09-14: 한글 로캘(cp949) Windows에서 ccx 출력에 cp949로 못 읽는 바이트가
+            # 섞여 있어 UnicodeDecodeError로 죽던 문제 - encoding/errors 명시로 방지.
         )
     except subprocess.TimeoutExpired:
         # Linux에서는 timeout 시 subprocess가 자식 프로세스(ccx)까지 함께 죽이므로

@@ -51,7 +51,7 @@ centerline_path = os.path.join(HERE, f"matv2_centerline_{tag}.json")
 subprocess.run(
     [sys.executable, os.path.join(HERE, "get_bent_centerline.py"),
      "--L_M", str(L_M), "--phi", str(phi), "--out", centerline_path],
-    check=True, capture_output=True, text=True,
+    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace",
 )
 
 out_path = os.path.join(HERE, "..", "..", "..", "data", "contact_scenarios", "fea",

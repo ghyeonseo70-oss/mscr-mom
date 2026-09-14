@@ -8,6 +8,66 @@ MSCR-MOM(자기 연성 카테터 로봇) 논문(Park et al., IEEE RA-L 2024) 재
 
 ## 🎯 지금 할 일 (우선순위 순)
 
+**✅ 2026-09-14(26번) FORCE_LOSS_WEIGHTS 재검증 — 폐기, 원래(0.1)로 복귀.** 25번 체크포인트의
+대체모델 5-fold R^2를 보니 Fy_total_N(=Fx_board)이 2026-08-19 당시 진단(-0.01, 노이즈)과
+달리 이제 0.649로 나옴(데이터가 그동안 518개로 늘어서) — "노이즈라 못 배운다"는 옛 전제로
+이 축 loss를 1/10로 깎아둔 `FORCE_LOSS_WEIGHTS=[0.1,1.0]`이 배울 수 있는 신호를 스스로
+억누르고 있었을 가능성이 있어 재검증(시드43, 파인튜닝 없음 기준):
+
+| 가중치 | balanced acc | s R²/MAE | Fx_board(전체) | **|phi|>=90 Fx_board** | Fy_board |
+|---|---|---|---|---|---|
+| **0.1(원래, 시드2개 검증됨)** | 83.0% | **0.910/5.77mm** | 0.626 | 0.440 | **0.855** |
+| 0.5(단일실행) | 83.1% | 0.883/6.26mm | 0.723 | **0.477** | 0.673 |
+| 1.0(단일실행) | **86.3%** | 0.915/5.95mm | 0.715 | 0.382 | 0.704 |
+
+**결론**: 가중치를 올릴수록 목표(|phi|>=90 Fx_board)가 단조롭게 좋아지지도 않고(0.5>0.1>1.0),
+대신 Fy_board(원래 제일 안정적이던 축)만 계속 나빠짐 - trunk 공유로 인한 멀티태스크
+트레이드오프. 0.5/1.0은 시드 1개뿐이라 이 파이프라인에서 이미 확인된 시드 노이즈 폭
+(Fy_board가 같은 세팅에서도 0.608~0.855까지 흔들림, 25번 참고) 안에 들어갈 수 있어
+신뢰 못 함 - 더 결론 내리려면 시드를 더 늘려야 하는데 그 정도 컴퓨팅을 쓸 근거가 약함.
+**가중치 튜닝은 여기서 폐기하고 0.1(시드2개로 검증된 유일한 설정)로 복귀함**(코드/체크포인트
+둘 다 복원 완료). |phi|>=90 문제는 loss weight가 아니라 **그 구간 실측 FEA를 더 모으는
+원래 처방**으로 넘어갈 것. 로그: `현서/scripts/contact_scenarios/fea/train_run_20260914*.log`.
+
+**✅ 2026-09-11(25번) L_M/phi를 예측 대상에서 빼고 known input으로 바꿈 — |phi|>=90
+Fx_board 문제 사실상 해결, config_head/lm_zero_head 통째로 제거.** 교수님 피드백("phi는
+조종자가 거는 외부자기장 방향인데 왜 굳이 센서로 추정하냐"): phi_deg는 `force_model.py`
+정의상 "외부자기장 방향"(제어입력), L_M도 그 로봇의 고정 MOM 위치 스펙이라 둘 다 실제
+운용에서는 이미 아는 값 — B-field에서 추정해야 할 미지수가 아님. `SingleProbeClassifier`가
+이 둘을 `config_head`로 "예측"하던 걸 없애고, `forward(x_img, config)`처럼 정규화된
+(L_M,phi)를 trunk에 직접 입력으로 넣도록 구조 변경(`train_segment_classifier_singleprobe_beta0180_4seg.py`).
+L_M=0 회귀 불안정을 우회하려고 8번(아래)에서 넣었던 `lm_zero_head`도 L_M을 더 이상
+추정할 필요가 없어지면서 같이 제거됨.
+
+CPU로 시드 2개(42,43) × 파인튜닝 유무 총 4회 정식 재학습(150k/60epoch)해서 교차검증:
+
+| 조건 | balanced acc | s R²/MAE | Fx_board(전체) | **|phi|>=90 Fx_board** | Fy_board |
+|---|---|---|---|---|---|
+| 이전 기준값(24번 이전, known-input 이전) | 80.2% | 0.871/6.49mm | 0.600 | 0.355 | 0.877 |
+| 시드42, 파인튜닝(2단계) 없음 | 85.1% | 0.908/5.80mm | 0.607 | 0.336 | 0.608 |
+| **시드43, 파인튜닝 없음 — 최종 채택** | **83.0%** | **0.910/5.77mm** | **0.626** | **0.440** | **0.855** |
+| 시드42/43, 파인튜닝(2단계, 실측 419개) 적용 | 69.7~70.3%(↓) | 0.806~0.829(↓) | 0.486~0.498(↓) | 0.432~0.530(↑) | 0.509~0.609(↓) |
+
+**결론**: (1) L_M/phi를 known input으로 주는 것만으로 balanced acc/s/Fx_board가 두 시드
+모두 일관되게 기존보다 좋아짐 — 교수님 지적이 맞았음. (2) 시드42의 Fy_board=0.608
+하락은 시드43(0.855)에서 정상 회복돼 **순수 시드 노이즈로 확정**(기존에도 반복 확인된
+패턴). (3) **24번의 2단계 파인튜닝은 |phi|>=90 Fx_board는 더 올리지만(0.336→0.432,
+0.440→0.530) balanced acc/s/Fy_board를 양쪽 시드 모두 일관되게 깎아먹음**(실측
+419개뿐이라 과적합으로 추정) — **`FINETUNE_ON_REAL=0`(기본 끔)을 권장, 24번의 파인튜닝
+레버는 사실상 폐기**. **최종 채택 체크포인트**: 시드43+파인튜닝없음
+(`models/position_segment_classifier_singleprobe_beta0180_4seg.pth`에 저장됨, 다른
+조합들은 `models/*_knowninput_*.pth`로 백업 보관). 로그는
+`현서/scripts/contact_scenarios/fea/train_run_20260911*.log` 4개 참고.
+
+**🔜 다음 세션**: (a) 이 체크포인트로 커밋할지 확인받을 것(아직 커밋 안 함). (b) 여기
+반영 안 된 진단 스크립트 6개(`_diag_lm_by_value_breakdown.py`, `_diag_lm_holdout_error.py`,
+`plot_final_scatter_summary.py`, `_diag_force_geom_reconstruction.py`,
+`_diag_holdout_phi_breakdown.py`, `_diag_pipeline_leakage.py`)는 여전히 옛 5-output
+`SingleProbeClassifier`를 복제해서 쓰고 있어 이 새 체크포인트를 못 읽음 - 필요할 때
+같은 패턴(known input)으로 같이 고칠 것. (c) `_diag_force_geom_reconstruction.py`(18번)의
+"진짜 phi 넣으면 R²=0.749" 재구성 아이디어를 이제 phi가 항상 known input이니 재검증해볼
+가치 있음(더 이상 "예측된 phi의 오차"가 없으므로).
+
 **⚠️ 2026-08-27(10차): HIGH_PHI_WEIGHT=1.5 재학습 — 뚜렷한 개선 없음, 이 레버는 폐기
 권장.** 20번 실행(시드=42, 커밋된 체크포인트와 동일 시드로 순수 비교) - **|phi|>=90
 구간 Fx_board R²=0.355**(가중치 3.0일 때 0.343과 사실상 동일, 개선 없음). 다른 지표는
@@ -484,11 +544,15 @@ R²=0.940→파이프라인 통과 후 0.337)도 실측 기준으로는 크게 �
    목표(|phi|>=90 Fx_board)는 0.343→0.355로 개선이 없어 **이 레버는 폐기, 실측 FEA
    추가로 넘어갈 것**(20번 참고).
 
-**모델 파일**: `models/position_segment_classifier_singleprobe_beta0180_4seg.pth` (2026-08-27
-HIGH_PHI_WEIGHT=1.5 반영 최신 재학습본 — L_M=0은 해결됨, |phi|>=90 Fx_board는 여전히
-약함(레버 폐기 결정), 위 표 마지막 줄이 이 모델의 성능). 학습
-스크립트에 비판적 리뷰로 찾은 결함 5개 수정 반영됨(Fy 가중치 축소, 실측 홀드아웃 분리,
-형상 그룹분리 train/val, balanced acc 기준 체크포인트, 서로게이트 불일치 리젝션 샘플링).
+**모델 파일**: `models/position_segment_classifier_singleprobe_beta0180_4seg.pth` (2026-09-11
+25번 반영 최신 재학습본 — L_M/phi가 예측 대상이 아니라 known input으로 바뀜, 시드43+
+파인튜닝없음 채택. balanced acc 83.0%, s R²=0.910, Fx_board(전체) R²=0.626, |phi|>=90
+Fx_board R²=0.440, Fy_board R²=0.855 — 위 25번 표 참고. **체크포인트 포맷이 바뀌어서
+`config_head`/`lm_zero_head` 없음 - 옛 5-output 구조를 가정하는 진단 스크립트는 이 파일을
+못 읽음(25번 다음 세션 항목 참고).** L_M=0 문제는 L_M 자체를 더 이상 추정하지 않으므로
+자연히 해소됨. 학습 스크립트에는 그 이전(2026-08-19) 비판적 리뷰로 찾은 결함 5개 수정도
+계속 반영돼 있음(Fy 가중치 축소, 실측 홀드아웃 분리, 형상 그룹분리 train/val, balanced
+acc 기준 체크포인트, 서로게이트 불일치 리젝션 샘플링).
 진단 스크립트(전부 `현서/scripts/contact_scenarios/fea/`): `_diag_surrogate_only.py`(대체모델
 단독 홀드아웃 검증), `_diag_pipeline_leakage.py`(환각학습 직접 증명), `_diag_failure_by_phi.py`
 (FEA 실패율 phi별 집계).

@@ -1,0 +1,75 @@
+﻿대체모델 학습 데이터: 419개 (전체 518개 중 99개는 순수 실측 검증용으로 분리, fea_lm_phi_pos_matv2_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용) ===
+  tip_ux_avg_mm: R^2=0.856
+  tip_uy_avg_mm: R^2=0.853
+  tip_uz_avg_mm: R^2=-0.960
+  tip_theta_deg_board: R^2=0.957
+  Fx_total_N: R^2=0.951
+  Fy_total_N: R^2=0.649
+  Fz_total_N: R^2=-1.044
+  F_mag_N: R^2=0.963
+  mom_ux_avg_mm: R^2=0.772
+  mom_uy_avg_mm: R^2=0.869
+  mom_uz_avg_mm: R^2=-1.211
+  mom_theta_deg_board: R^2=0.886
+대체모델 학습 완료 (93s)
+150000개 단일관측(beta=0/180도 한정) 합성 데이터 생성 시작 (16-way 병렬)...
+s 공간가중치(s=40mm부터 100mm까지 최대 3.0배 램프): 평균=1.39, s>=100mm 샘플 수=0개
+합성 데이터 생성 완료: 150000개 (3205s), 서로게이트 불일치로 거른 샘플: 3208개
+구간별 샘플 수: {0: 20300, 1: 42742, 2: 43508, 3: 43450}
+|phi|>=90 힘 손실 가중치 1.5배 적용: 58403/150000개 샘플
+최종 분류기 학습 시작 (device=cpu)...
+train/val 분리: 형상(L_M,phi) 그룹 341개 중 train 306개 / val 35개 (겹치는 그룹 0개)
+Epoch [ 1/60] ValAcc  73.0%  BalAcc  72.6%  SegLoss 0.6267  ForceLoss 0.3703  SLoss 0.2751
+Epoch [ 5/60] ValAcc  81.1%  BalAcc  82.0%  SegLoss 0.5109  ForceLoss 0.1970  SLoss 0.2019
+Epoch [10/60] ValAcc  83.3%  BalAcc  84.2%  SegLoss 0.4814  ForceLoss 0.1631  SLoss 0.1691
+Epoch [15/60] ValAcc  84.2%  BalAcc  84.8%  SegLoss 0.4840  ForceLoss 0.1558  SLoss 0.1665
+Epoch [20/60] ValAcc  84.5%  BalAcc  85.0%  SegLoss 0.4439  ForceLoss 0.1398  SLoss 0.1365
+Epoch [25/60] ValAcc  86.0%  BalAcc  86.7%  SegLoss 0.4231  ForceLoss 0.1155  SLoss 0.1252
+Epoch [30/60] ValAcc  86.6%  BalAcc  86.9%  SegLoss 0.4103  ForceLoss 0.1074  SLoss 0.1301
+Epoch [35/60] ValAcc  87.5%  BalAcc  87.7%  SegLoss 0.3592  ForceLoss 0.0977  SLoss 0.1122
+Epoch [40/60] ValAcc  84.3%  BalAcc  84.6%  SegLoss 0.4591  ForceLoss 0.1069  SLoss 0.1490
+Epoch [45/60] ValAcc  87.1%  BalAcc  87.4%  SegLoss 0.3752  ForceLoss 0.1015  SLoss 0.1079
+Epoch [50/60] ValAcc  86.9%  BalAcc  87.8%  SegLoss 0.4264  ForceLoss 0.1202  SLoss 0.1353
+Epoch [55/60] ValAcc  87.2%  BalAcc  87.7%  SegLoss 0.3698  ForceLoss 0.1095  SLoss 0.1177
+Epoch [60/60] ValAcc  84.3%  BalAcc  84.9%  SegLoss 0.5026  ForceLoss 0.1059  SLoss 0.1581
+학습 완료 (190s), 최적 epoch=51 (balanced accuracy 기준, 88.9%)
+
+=== 최종 검증 정확도: 88.0% (n_val=15520), 무작위 기준선=25.0% ===
+balanced accuracy(구간별 recall 평균): 88.9%
+구간별 recall: {'0-20mm': '94.7%', '20-40mm': '88.9%', '40-60mm': '81.4%', '60-80mm': '90.5%'}
+오답 중 인접구간 비율: 95.4%
+
+보조회귀 s(연속값): R^2=0.928, MAE=3.39mm
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=15520) ===
+  Fx_board_N: R^2=0.820, MAE=0.0022mN
+  Fy_board_N: R^2=0.853, MAE=0.0039mN
+  F_mag(유도): R^2=0.853, MAE=0.0037mN
+
+=== 순수 실측 FEA 검증 (대체모델 안 거침, n=99) ===
+
+--- [1단계(기존 파이프라인, 파인튜닝 전)] 순수 실측 FEA 검증 (n=99) ---
+  구간분류: acc=82.8%, balanced acc=83.0%
+  s(연속값): R^2=0.910, MAE=5.77mm
+    s>=60mm(팁 근처, n=34) MAE=9.85mm (재튜닝 전 기준값 9.49mm와 비교할 것)
+  Fx_board_N: R^2=0.626, MAE=0.0049mN
+    |phi|>=90(n=54) R^2=0.440 (기준값 0.355와 비교할 것)
+  Fy_board_N: R^2=0.855, MAE=0.0074mN
+
+2단계 파인튜닝 데이터: 실측 fit_rows 419개 (|phi|>=90: 235개, 4배 오버샘플링 후 배치풀 1124개)
+2단계 파인튜닝 완료 (15 epoch, lr=5e-05)
+
+--- [2단계(실측 파인튜닝 후, 신규)] 순수 실측 FEA 검증 (n=99) ---
+  구간분류: acc=73.7%, balanced acc=70.3%
+  s(연속값): R^2=0.806, MAE=10.22mm
+    s>=60mm(팁 근처, n=34) MAE=7.32mm (재튜닝 전 기준값 9.49mm와 비교할 것)
+  Fx_board_N: R^2=0.498, MAE=0.0055mN
+    |phi|>=90(n=54) R^2=0.530 (기준값 0.355와 비교할 것)
+  Fy_board_N: R^2=0.509, MAE=0.0159mN
+
+※ 위 1단계 vs 2단계 수치를 직접 비교해서 파인튜닝이 실제로 도움이 됐는지 판단할 것 - 특히 |phi|>=90 Fx_board R^2(기준값 0.355)와 s>=60mm MAE(기준값 9.49mm). 도움 안 되면 FINETUNE_ON_REAL=0으로 꺼서 1단계 체크포인트로 되돌릴 것.
+
+저장: C:\Users\gustj\Desktop\김현서\김현서\홀센서 코드\현서\scripts\contact_scenarios\fea\..\..\..\models/position_segment_classifier_singleprobe_beta0180_4seg.pth
+
+총 소요시간: 59.7분
