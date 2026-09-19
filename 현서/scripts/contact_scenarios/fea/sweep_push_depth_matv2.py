@@ -91,10 +91,19 @@ def tag_of(lm, phi, depth):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--merge-only", action="store_true",
+                         help="FEA는 안 돌리고 이미 있는 DEPTH*.json만 all.json에 병합 - "
+                              "git 충돌 해결 후 양쪽 데이터를 합칠 때 사용(중복 제거됨).")
     parser.add_argument("--depths", type=str, default=None,
                          help=f"쉼표구분 깊이(mm) 목록 (기본 {DEFAULT_DEPTHS})")
     parser.add_argument("--n-configs", type=int, default=30,
                          help="깊이별로 재실행할 (L_M,phi,s) 조합 개수 (기본 30)")
+    parser.add_argument("--config-start", type=int, default=0,
+                         help="선택된 조합 목록에서 앞의 N개를 건너뜀 - 여러 컴퓨터가 "
+                              "겹치지 않게 나눠 돌리기 위한 옵션. 층화추출은 시드 고정이라 "
+                              "같은 목록이 결정적으로 재현되므로, A컴퓨터가 "
+                              "--config-start 0 --n-configs 30, B컴퓨터가 "
+                              "--config-start 30 --n-configs 120 식으로 나누면 중복 없음.")
     parser.add_argument("--max-attempts", type=int, default=None,
                          help="이번 실행에서 시도할 케이스 개수 상한 - 케이스당 ~15~20분")
     parser.add_argument("--threads", type=int, default=4)
@@ -104,14 +113,20 @@ def main():
                          help="예상시간 계산용 동시 실행 개수(실제 병렬 실행은 셸에서)")
     args = parser.parse_args()
 
+    if args.merge_only:
+        merge_into_all()
+        return
+
     depths = [float(v) for v in args.depths.split(",")] if args.depths else list(DEFAULT_DEPTHS)
     rows = load_rows()
     have = existing_keys(rows)
-    configs = select_configs(rows, args.n_configs)
+    # 앞부분을 건너뛰려면 그만큼 더 뽑아야 함(층화추출 목록은 결정적이라 앞 N개는 항상 동일).
+    configs = select_configs(rows, args.config_start + args.n_configs)[args.config_start:]
 
     print(f"기존 데이터 {len(rows)}행 (그중 depth={BASE_DEPTH}mm: "
           f"{sum(1 for r in rows if round(r.get('push_depth_mm', BASE_DEPTH), 3) == BASE_DEPTH)}행)")
-    print(f"선택된 기준 조합: {len(configs)}개, 새로 돌릴 깊이: {depths}")
+    print(f"선택된 기준 조합: {len(configs)}개 "
+          f"(전체 목록에서 {args.config_start}번째부터), 새로 돌릴 깊이: {depths}")
 
     # (L_M, phi, depth)로 묶어서 s를 한 번에 넘김 - centerline 재계산을 아껴줌.
     todo = {}
@@ -180,15 +195,31 @@ def main():
                   f"(s {len(s_list)}개) {status}  경과 {(time.time()-t0)/60:.1f}분", flush=True)
     print(f"=== 완료 ({(time.time() - t0) / 60:.1f}분) ===")
 
-    print("=== 기존 fea_lm_phi_pos_matv2_all.json에 병합 ===")
+    merge_into_all()
+
+
+def merge_into_all():
+    """DEPTH*.json들을 all.json에 병합. (L_M,phi,beta,s,depth) 키로 중복 제거하므로
+    여러 번 실행해도 안전하고, 두 컴퓨터가 각자 병합한 뒤 git 충돌이 났을 때도
+    아무 쪽이나 고른 다음 이 함수만 다시 돌리면 양쪽 데이터가 온전히 합쳐짐."""
+    print("=== 기존 fea_lm_phi_pos_matv2_all.json에 병합 (중복 제거) ===")
     merged = load_rows()
     before = len(merged)
+    seen = {(round(r["L_M_mm"], 1), round(r["phi_deg"], 1), round(r["beta_deg"], 1),
+             round(r["contact_s_mm"], 1), round(r.get("push_depth_mm", BASE_DEPTH), 3)): r
+            for r in merged}
+    added = 0
     for f in sorted(glob.glob(os.path.join(FEA_DATA_DIR, "fea_lm_phi_pos_matv2_DEPTH*.json"))):
-        merged.extend(json.load(open(f, encoding="utf-8")))
-    merged.sort(key=lambda r: (r["beta_deg"], r["L_M_mm"], r["phi_deg"],
-                                r.get("push_depth_mm", BASE_DEPTH), r["contact_s_mm"]))
+        for r in json.load(open(f, encoding="utf-8")):
+            key = (round(r["L_M_mm"], 1), round(r["phi_deg"], 1), round(r["beta_deg"], 1),
+                   round(r["contact_s_mm"], 1), round(r.get("push_depth_mm", BASE_DEPTH), 3))
+            if key not in seen:
+                seen[key] = r
+                added += 1
+    merged = sorted(seen.values(), key=lambda r: (r["beta_deg"], r["L_M_mm"], r["phi_deg"],
+                                                   r.get("push_depth_mm", BASE_DEPTH), r["contact_s_mm"]))
     json.dump(merged, open(OUT_PATH, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-    print(f"병합 완료: {before}개 -> {len(merged)}개 (+{len(merged) - before}, 시도 {total}개 중)")
+    print(f"병합 완료: {before}개 -> {len(merged)}개 (신규 {added}개)")
 
 
 if __name__ == "__main__":
