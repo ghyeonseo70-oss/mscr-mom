@@ -40,11 +40,18 @@ parser.add_argument("--s_list", type=str, default=None,
 parser.add_argument("--stabilize_value", type=float, default=None,
                      help="stabilize=True(자동감쇠) 대신 명시적 감쇠계수 지정 (*STATIC,STABILIZE=값) - "
                           "2026-08-21 STABILIZE 감쇠값 튜닝 파일럿용으로 추가")
+parser.add_argument("--push_depth", type=float, default=None,
+                     help="눌러넣는 깊이(mm) - 기본 0.10 고정값 덮어쓰기. 2026-09-19 추가: "
+                          "형상 추정으로 방향 전환하면서 '충돌 강도에 따라 얼마나 더 휘는지'를 "
+                          "배우려면 깊이가 여러 값이어야 하는데 기존 518개가 전부 0.10mm라 "
+                          "그 축의 데이터가 아예 없었음(PROJECT_STATUS.md 30번 참고).")
 args = parser.parse_args()
 
 L_M, phi, beta, tag = args.L_M, args.phi, args.beta, args.tag
 if args.s_list is not None:
     S_LIST = [float(v) for v in args.s_list.split(",")]
+if args.push_depth is not None:
+    PUSH_DEPTH = args.push_depth
 stabilize_arg = args.stabilize_value if args.stabilize_value is not None else True
 
 centerline_path = os.path.join(HERE, f"matv2_centerline_{tag}.json")
