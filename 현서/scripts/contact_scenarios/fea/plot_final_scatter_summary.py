@@ -67,11 +67,13 @@ class SingleProbeClassifier(nn.Module):
         self.seg_head = nn.Linear(128, n_classes)
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
+        # 2026-09-21(36번): shape_head 추가 - 체크포인트 키를 맞추려면 여기도 있어야 함.
+        self.shape_head = nn.Linear(128, 3)
 
     def forward(self, x, config):
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds + [config], dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1)
+        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.shape_head(h)
 
 
 cnn = SingleProbeClassifier()
@@ -139,7 +141,7 @@ real_c_norm = (real_c - c_mean) / c_std
 with torch.no_grad():
     rX = torch.tensor(real_X_norm[:, None]).float()
     rC = torch.tensor(real_c_norm).float()
-    _, r_force_pred, r_s_pred = cnn(rX, rC)
+    _, r_force_pred, r_s_pred, _ = cnn(rX, rC)
     force_phys = r_force_pred.numpy() * f_std + f_mean
     s_phys = r_s_pred.numpy() * s_std + s_mean
 

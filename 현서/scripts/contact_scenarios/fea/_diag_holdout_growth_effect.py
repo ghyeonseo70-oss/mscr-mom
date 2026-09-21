@@ -45,7 +45,10 @@ def is_holdout_row(r, frac=0.2):
 
 
 def row_key(r):
-    return (r["L_M_mm"], r["phi_deg"], r["beta_deg"], r["contact_s_mm"])
+    # 2026-09-21(36번) 수정: 깊이를 키에 포함. 안 그러면 같은 조합의 0.05/0.20mm 변형까지
+    # "기존 행"으로 셈해져서(99개여야 할 게 129개로 나옴) 31번 기준값과 비교가 어긋남.
+    return (r["L_M_mm"], r["phi_deg"], r["beta_deg"], r["contact_s_mm"],
+            round(r.get("push_depth_mm", 0.1), 3))
 
 
 all_rows = []
@@ -80,16 +83,23 @@ class SingleProbeClassifier(nn.Module):
         self.seg_head = nn.Linear(128, n_classes)
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
+        # 2026-09-21(36번): shape_head 추가 - 체크포인트 키를 맞추려면 여기도 있어야 함.
+        self.shape_head = nn.Linear(128, 3)
 
     def forward(self, x, config):
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds + [config], dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1)
+        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.shape_head(h)
 
 
+# 2026-09-21(36번): shape_head 도입 과도기라 체크포인트에 shape_head가 있을 수도 없을 수도
+# 있음(36번 이전 학습분은 없음). 키 존재 여부로 판단해서 양쪽 다 읽을 수 있게 함 -
+# 이 진단은 shape를 안 쓰므로 없으면 랜덤 초기화된 채로 두고 무시하면 됨.
+HAS_SHAPE_HEAD = "shape_head.weight" in ckpt["state_dict"]
 cnn = SingleProbeClassifier()
-cnn.load_state_dict(ckpt["state_dict"])
+cnn.load_state_dict(ckpt["state_dict"], strict=HAS_SHAPE_HEAD)
 cnn.eval()
+print(f"체크포인트 shape_head 포함 여부: {HAS_SHAPE_HEAD}")
 X_mean2, X_std2 = ckpt["X_mean"], ckpt["X_std"]
 f_mean, f_std = ckpt["f_mean"], ckpt["f_std"]
 s_mean, s_std = ckpt["s_mean"], ckpt["s_std"]
@@ -144,7 +154,7 @@ fs, cs = np.array(fs, dtype=np.float32), np.array(cs, dtype=np.float32)
 is_old = np.array(is_old)
 
 with torch.no_grad():
-    seg, force, s_pred = cnn(torch.tensor(((X - X_mean2) / X_std2)[:, None]).float(),
+    seg, force, s_pred, _ = cnn(torch.tensor(((X - X_mean2) / X_std2)[:, None]).float(),
                               torch.tensor((cs - c_mean) / c_std).float())
     pred_class = seg.argmax(dim=1).numpy()
     force_phys = force.numpy() * f_std + f_mean

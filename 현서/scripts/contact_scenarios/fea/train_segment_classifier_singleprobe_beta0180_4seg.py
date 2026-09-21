@@ -44,6 +44,15 @@ TARGETS = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_uz_avg_mm", "tip_theta_deg_boa
 # 새 데이터부터는 이 값을 그대로 쓰고, 없는 옛 데이터는 하위호환을 위해 frac 근사로 대체.
 MOM_TARGETS_MISSING_OLD_DATA = ["mom_ux_avg_mm", "mom_uy_avg_mm", "mom_uz_avg_mm", "mom_theta_deg_board"]
 
+# 2026-09-21(36번) shape_head: "충돌 시 로봇이 어떤 형상이 되는가"를 CNN이 직접 예측.
+# 목표를 힘 정량화에서 형상 추정으로 전환하면서 추가(PROJECT_STATUS.md 34~36번).
+# 힘을 전혀 거치지 않는다는 게 핵심 - delta-B는 애초에 "자석이 얼마나 움직였는가"로부터
+# 계산되는 신호라(worker()의 compute_B 참고), 변위를 되찾는 게 가장 직접적인 역문제임.
+# 34번에서 확인: 변형의 "모양"은 (L_M,phi,s)가 100% 결정하고 깊이는 크기만 조절하므로
+# (깊이 4배에도 팁변위/회전 비율 변동 0.011%), 모양 쪽은 known input으로 거의 결정됨.
+# 서로게이트 난이도도 낮음(tip_theta R^2=0.97, tip_ux 0.88 vs 문제의 Fy_total_N 0.44).
+SHAPE_NAMES = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_theta_deg_board"]
+
 # (예전엔 여기에 L_M=0 근처 연속회귀 실패 문제를 우회하는 lm_zero_head/LM_ZERO_THRESHOLD_MM가
 # 있었음 - 2026-09-11에 L_M을 아예 예측 대상에서 빼고 known input으로 바꾸면서 그 우회
 # 자체가 필요 없어져 제거함. 자세한 배경은 SingleProbeClassifier 클래스 docstring 참고.)
@@ -171,6 +180,11 @@ def worker(args):
     fb = np.zeros((n_chunk, 3), dtype=np.float32)
     sb = np.zeros(n_chunk, dtype=np.float32)
     cb = np.zeros((n_chunk, 2), dtype=np.float32)  # L_M(mm), phi(deg)
+    # 2026-09-21(36번): shape_head용 정답. 여태 팁 변위는 자기장을 만드는 데만 쓰고 버렸는데
+    # (아래 d_xL_local 등), 이제 "충돌 시 로봇이 어떤 형상이 되는가"를 CNN이 직접 예측하도록
+    # 정답으로도 저장함. 보드좌표계 원본값(축교환 전)을 그대로 씀 - 실측 FEA 행의
+    # tip_ux_avg_mm/tip_uy_avg_mm/tip_theta_deg_board와 같은 정의여야 홀드아웃 평가가 맞음.
+    shb = np.zeros((n_chunk, len(SHAPE_NAMES)), dtype=np.float32)
     n_ok = 0
     while n_ok < n_chunk:
         L_M = rng.uniform(*L_M_range)
@@ -217,8 +231,9 @@ def worker(args):
         fb[n_ok] = [pred["Fy_total_N"], pred["Fx_total_N"], pred["F_mag_N"]]  # 축교환
         sb[n_ok] = s
         cb[n_ok] = [L_M, phi]
+        shb[n_ok] = [pred[t] for t in SHAPE_NAMES]
         n_ok += 1
-    return Xb, yb, fb, sb, cb, n_rejected
+    return Xb, yb, fb, sb, cb, shb, n_rejected
 
 
 class SingleProbeClassifier(nn.Module):
@@ -234,7 +249,8 @@ class SingleProbeClassifier(nn.Module):
     vs 진짜 L_M/phi로 재구성 R^2=0.75). L_M=0 근처 회귀가 불안정해서 넣었던 lm_zero_head도
     L_M을 더 이상 추정할 필요가 없어지면서 같이 제거됨(L_M=0 문제 자체가 사라짐).
     진짜 미지수(센서로 알아내야 하는 값)는 접촉위치(s)와 접촉힘(Fx,Fy)뿐."""
-    def __init__(self, n_probes=N_PROBES, n_classes=N_CLASSES, n_force=2, n_config_in=2):
+    def __init__(self, n_probes=N_PROBES, n_classes=N_CLASSES, n_force=2, n_config_in=2,
+                 n_shape=len(SHAPE_NAMES)):
         super().__init__()
         self.n_probes = n_probes
         self.encoder = nn.Sequential(
@@ -248,12 +264,15 @@ class SingleProbeClassifier(nn.Module):
         self.seg_head = nn.Linear(128, n_classes)
         self.force_head = nn.Linear(128, n_force)
         self.s_head = nn.Linear(128, 1)
+        # 2026-09-21(36번) 신규: 충돌 시 팁 변위/회전(=형상) 직접 예측. SHAPE_NAMES 주석 참고.
+        self.shape_head = nn.Linear(128, n_shape)
 
     def forward(self, x, config):
         """config: 정규화된 (L_M_mm, phi_deg) - 이미 아는 값, B-field와 함께 trunk에 들어감."""
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds + [config], dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1)
+        return (self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1),
+                self.shape_head(h))
 
 
 if __name__ == "__main__":
@@ -365,7 +384,8 @@ if __name__ == "__main__":
     f_all = np.concatenate([r[2] for r in results], axis=0)
     s_all = np.concatenate([r[3] for r in results], axis=0)
     c_all = np.concatenate([r[4] for r in results], axis=0)
-    n_rejected_total = sum(r[5] for r in results)
+    sh_all = np.concatenate([r[5] for r in results], axis=0)  # 36번: shape_head 정답
+    n_rejected_total = sum(r[6] for r in results)
     s_weight_all = s_spatial_weight(s_all).astype(np.float32)
     print(f"s 공간가중치(s={S_WEIGHT_RAMP_START_MM:.0f}mm부터 {S_WEIGHT_RAMP_END_MM:.0f}mm까지 "
           f"최대 {S_WEIGHT_MAX}배 램프): 평균={s_weight_all.mean():.2f}, "
@@ -375,12 +395,20 @@ if __name__ == "__main__":
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
 
     np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_singleprobe_beta0180_4seg.npz"),
-             X=X_all, y=y_all, f=f_all, s=s_all, c=c_all)
+             X=X_all, y=y_all, f=f_all, s=s_all, c=c_all, sh=sh_all)
 
     fxy_all = f_all[:, :2]
     f_mean, f_std = fxy_all.mean(axis=0), fxy_all.std(axis=0)
     f_std[f_std < 1e-12] = 1.0
     f_norm = (fxy_all - f_mean) / f_std
+
+    # 36번: 타겟마다 스케일이 제각각이라(팁변위 ~0.2mm vs 힘 ~0.000005N) 정규화 없이 더하면
+    # 숫자 큰 항만 학습됨 - 기존 f/s/c와 똑같이 평균0/표준편차1로 맞춤.
+    sh_mean, sh_std = sh_all.mean(axis=0), sh_all.std(axis=0)
+    sh_std[sh_std < 1e-12] = 1.0
+    sh_norm = (sh_all - sh_mean) / sh_std
+    print(f"shape_head 타겟 분포: " + ", ".join(
+        f"{n}={m:+.4f}±{s:.4f}" for n, m, s in zip(SHAPE_NAMES, sh_mean, sh_std)))
 
     s_mean, s_std = s_all.mean(), s_all.std()
     s_norm = (s_all - s_mean) / s_std
@@ -433,7 +461,8 @@ if __name__ == "__main__":
                       torch.tensor(f_norm[train_idx]).float(), torch.tensor(s_norm[train_idx]).float(),
                       torch.tensor(c_norm[train_idx]).float(),
                       torch.tensor(phi_weight_all[train_idx]).float(),
-                      torch.tensor(s_weight_all[train_idx]).float()),
+                      torch.tensor(s_weight_all[train_idx]).float(),
+                      torch.tensor(sh_norm[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
     val_y = torch.tensor(y_all[val_idx]).long().to(device)
@@ -445,6 +474,8 @@ if __name__ == "__main__":
     val_c_phys = c_all[val_idx]
     val_phi_weight = torch.tensor(phi_weight_all[val_idx]).float().to(device)
     val_s_weight = torch.tensor(s_weight_all[val_idx]).float().to(device)
+    val_sh = torch.tensor(sh_norm[val_idx]).float().to(device)
+    val_sh_phys = sh_all[val_idx]
 
     # 2026-08-26 추가: 여기까지 최종 CNN(SingleProbeClassifier) 학습에는 시드 고정이 전혀
     # 없었음(대체모델 앙상블만 seed=i로 고정돼있었음) - 가중치 초기화, DataLoader shuffle이
@@ -459,6 +490,7 @@ if __name__ == "__main__":
     model = SingleProbeClassifier().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
+    shape_criterion = nn.MSELoss()  # 36번: shape_head. 정규화된 공간이라 가중치 1.0으로 시작.
     # 2026-08-19 비판적 리뷰 #1 (2026-09-14 재검토): 그 시점엔 대체모델 5-fold R^2가
     # Fy_total_N=-0.01(노이즈)이라 이 축 loss를 1/10로 깎았었음. 그 이후 데이터가 늘어서
     # (지금 518개) 같은 진단이 R^2=0.649로 나와 "노이즈라 못 배운다"는 전제가 깨졌길래
@@ -493,21 +525,23 @@ if __name__ == "__main__":
     best_epoch = -1
     for epoch in range(N_EPOCHS):
         model.train()
-        for bx, by, bf, bs, bc, bw, bsw in train_loader:
-            bx, by, bf, bs, bc, bw, bsw = (bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                                            bc.to(device), bw.to(device), bsw.to(device))
+        for bx, by, bf, bs, bc, bw, bsw, bsh in train_loader:
+            bx, by, bf, bs, bc, bw, bsw, bsh = (bx.to(device), by.to(device), bf.to(device),
+                                                 bs.to(device), bc.to(device), bw.to(device),
+                                                 bsw.to(device), bsh.to(device))
             optimizer.zero_grad()
-            seg_logits, force_pred, s_pred = model(bx, bc)
+            seg_logits, force_pred, s_pred, shape_pred = model(bx, bc)
             loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                    + weighted_s_loss(s_pred, bs, bsw))
+                    + weighted_s_loss(s_pred, bs, bsw) + shape_criterion(shape_pred, bsh))
             loss.backward()
             optimizer.step()
         model.eval()
         with torch.no_grad():
-            val_seg_logits, val_force_pred, val_s_pred = model(val_X, val_c)
+            val_seg_logits, val_force_pred, val_s_pred, val_shape_pred = model(val_X, val_c)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
             val_force_loss = weighted_force_loss(val_force_pred, val_f, val_phi_weight).item()
             val_s_loss = weighted_s_loss(val_s_pred, val_s, val_s_weight).item()
+            val_shape_loss = shape_criterion(val_shape_pred, val_sh).item()
             val_pred_epoch = val_seg_logits.argmax(dim=1)
             val_acc = (val_pred_epoch == val_y).float().mean().item()
             # 2026-08-19 비판적 리뷰 #4: 체크포인트를 "손실 단순합" 대신 실제 목표인
@@ -524,16 +558,17 @@ if __name__ == "__main__":
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             best_epoch = epoch + 1
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}")
+            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ShapeLoss {val_shape_loss:.4f}")
     print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (balanced accuracy 기준, {best_bal_acc*100:.1f}%)")
 
     model.load_state_dict(best_state)
     model.eval()
     with torch.no_grad():
-        val_seg_logits, val_force_pred, val_s_pred = model(val_X, val_c)
+        val_seg_logits, val_force_pred, val_s_pred, val_shape_pred = model(val_X, val_c)
         val_pred = val_seg_logits.argmax(dim=1)
         val_force_pred_phys = val_force_pred.cpu().numpy() * f_std + f_mean
         val_s_pred_phys = val_s_pred.cpu().numpy() * s_std + s_mean
+        val_shape_pred_phys = val_shape_pred.cpu().numpy() * sh_std + sh_mean
     final_acc = (val_pred == val_y).float().mean().item()
     conf = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
     for t, p in zip(val_y.tolist(), val_pred.tolist()):
@@ -571,6 +606,17 @@ if __name__ == "__main__":
     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
     mae = np.mean(np.abs(pred_fmag - true_fmag_2d))
     print(f"  F_mag(유도): R^2={r2:.3f}, MAE={mae*1000:.4f}mN")
+
+    # 2026-09-21(36번): shape_head - 충돌 시 형상(팁 변위/회전). 28번 교훈대로 R²와 MAE 병행.
+    print(f"\n=== 형상(shape_head) 회귀 성능 (합성-val, n_val={len(val_idx)}) ===")
+    for i, name in enumerate(SHAPE_NAMES):
+        pred_i, true_i = val_shape_pred_phys[:, i], val_sh_phys[:, i]
+        ss_res = np.sum((pred_i - true_i) ** 2)
+        ss_tot = np.sum((true_i - true_i.mean()) ** 2)
+        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else float("nan")
+        unit = "deg" if "theta" in name else "mm"
+        print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.4f}{unit} "
+              f"(정답값 표준편차={true_i.std():.4f}{unit})")
 
     # 2026-09-11: L_M,phi는 더 이상 모델이 예측하는 값이 아니라 known input(config_names
     # 순서로 val_c/val_c_phys에 그대로 들어있음)이라, 여기서 정확도를 "리포트"할 대상 자체가
@@ -610,7 +656,7 @@ if __name__ == "__main__":
     # 2026-09-07 리팩터: 이 실측 행 -> B-field 배열 변환 로직을 함수로 뽑아서
     # real_holdout_rows뿐 아니라 fit_rows(파인튜닝용)에도 재사용.
     def rows_to_arrays(rows):
-        Xs, ys, fs, ss, cs = [], [], [], [], []
+        Xs, ys, fs, ss, cs, shs = [], [], [], [], [], []
         for r in rows:
             L_M, phi = r["L_M_mm"], r["phi_deg"]
             s = r["contact_s_mm"]
@@ -635,9 +681,10 @@ if __name__ == "__main__":
             fs.append([r["Fy_total_N"], r["Fx_total_N"]])  # fb와 동일 순서(축교환)
             ss.append(s)
             cs.append([L_M, phi])  # config_names=["L_M_mm","phi_deg"]와 동일 순서
-        return Xs, ys, fs, ss, cs
+            shs.append([r[t] for t in SHAPE_NAMES])  # 36번: 실측 FEA의 진짜 팁 변위/회전
+        return Xs, ys, fs, ss, cs, shs
 
-    real_X, real_y, real_f, real_s, real_c = rows_to_arrays(real_holdout_rows)
+    real_X, real_y, real_f, real_s, real_c, real_sh = rows_to_arrays(real_holdout_rows)
 
     if len(real_X) < 5:
         print(f"  free-shape 계산 성공 케이스가 {len(real_X)}개뿐이라 통계적으로 의미 있는 평가 불가")
@@ -648,6 +695,7 @@ if __name__ == "__main__":
         real_f_arr = np.array(real_f, dtype=np.float32)
         real_s_arr = np.array(real_s, dtype=np.float32)
         real_c_arr = np.array(real_c, dtype=np.float32)
+        real_sh_arr = np.array(real_sh, dtype=np.float32)  # 36번: 형상 정답(실측 FEA)
         # L_M,phi는 실측 FEA 행에도 이미 정답으로 들어있는 known input이라(예측할 필요
         # 없음), 여기서 정규화해서 model.forward()의 config 입력으로 그대로 씀.
         real_c_norm = (real_c_arr - c_mean) / c_std
@@ -659,10 +707,11 @@ if __name__ == "__main__":
             with torch.no_grad():
                 rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5)
                 rC = torch.tensor(real_c_norm).float().to(device)  # known L_M,phi 입력
-                r_seg_logits, r_force_pred, r_s_pred = model(rX, rC)
+                r_seg_logits, r_force_pred, r_s_pred, r_shape_pred = model(rX, rC)
                 r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
                 r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
                 r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
+                r_shape_phys = r_shape_pred.cpu().numpy() * sh_std + sh_mean
 
             print(f"\n--- [{label}] 순수 실측 FEA 검증 (n={len(real_y_arr)}) ---")
             real_acc = float((r_pred_class == real_y_arr).mean())
@@ -710,6 +759,19 @@ if __name__ == "__main__":
                             print(f"    {label}(n={int(mask.sum())}) R^2={r2_m:.3f}, MAE={mae_m:.4f}mN "
                                   f"(실제값표준편차={std_m:.4f}mN, 기준값: R^2=0.355/0.720, MAE는 25/26번 로그 참고)")
 
+            # 2026-09-21(36번): 형상(shape_head) - 실측 FEA 기준이 유일한 정직한 지표.
+            # 합성-val은 "대체모델이 만든 데이터를 대체모델 기반 모델이 맞히는" 순환검증이라
+            # 항상 좋게 나옴(8월에 크게 데인 부분). 28번 교훈대로 R^2/MAE/정답분산 병행.
+            print(f"  --- 형상(shape_head) ---")
+            for i, name in enumerate(SHAPE_NAMES):
+                pred_i, true_i = r_shape_phys[:, i], real_sh_arr[:, i]
+                ss_res_sh = np.sum((pred_i - true_i) ** 2)
+                ss_tot_sh = np.sum((true_i - true_i.mean()) ** 2)
+                r2_sh = 1 - ss_res_sh / ss_tot_sh if ss_tot_sh > 0 else float("nan")
+                unit = "deg" if "theta" in name else "mm"
+                print(f"    {name}: R^2={r2_sh:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.4f}{unit} "
+                      f"(정답값표준편차={true_i.std():.4f}{unit})")
+
         evaluate_real("1단계(기존 파이프라인, 파인튜닝 전)")
 
         # ============================================================
@@ -723,7 +785,7 @@ if __name__ == "__main__":
         # ============================================================
         FINETUNE_ON_REAL = int(os.environ.get("FINETUNE_ON_REAL", 1))
         if FINETUNE_ON_REAL:
-            ft_X, ft_y, ft_f, ft_s, ft_c = rows_to_arrays(fit_rows)
+            ft_X, ft_y, ft_f, ft_s, ft_c, ft_sh = rows_to_arrays(fit_rows)
             if len(ft_X) < 20:
                 print(f"\n2단계 파인튜닝 스킵: 실측 fit_rows 중 free-shape 계산 성공이 "
                       f"{len(ft_X)}개뿐(20개 미만)")
@@ -737,6 +799,7 @@ if __name__ == "__main__":
                 ft_s_norm = (ft_s_arr - s_mean) / s_std
                 ft_c_arr = np.array(ft_c, dtype=np.float32)
                 ft_c_norm = (ft_c_arr - c_mean) / c_std  # known L_M,phi 입력(정규화)
+                ft_sh_norm = (np.array(ft_sh, dtype=np.float32) - sh_mean) / sh_std  # 36번
                 ft_phi_weight = np.where(np.abs(ft_c_arr[:, 1]) >= 90, HIGH_PHI_WEIGHT, 1.0).astype(np.float32)
                 ft_s_weight = s_spatial_weight(ft_s_arr).astype(np.float32)
 
@@ -752,7 +815,7 @@ if __name__ == "__main__":
                 ft_tensors = [torch.tensor(ft_X_norm[:, None]).float(), torch.tensor(ft_y_arr).long(),
                               torch.tensor(ft_f_norm).float(), torch.tensor(ft_s_norm).float(),
                               torch.tensor(ft_c_norm).float(), torch.tensor(ft_phi_weight).float(),
-                              torch.tensor(ft_s_weight).float()]
+                              torch.tensor(ft_s_weight).float(), torch.tensor(ft_sh_norm).float()]
                 ft_dataset = TensorDataset(*[t[oversample_idx] for t in ft_tensors])
                 FT_EPOCHS = int(os.environ.get("FT_EPOCHS", 15))
                 FT_LR = float(os.environ.get("FT_LR", 5e-5))  # 기존 lr(1e-3)의 1/20 - 150k 합성
@@ -763,14 +826,14 @@ if __name__ == "__main__":
 
                 model.train()
                 for ft_epoch in range(FT_EPOCHS):
-                    for bx, by, bf, bs, bc, bw, bsw in ft_loader:
-                        bx, by, bf, bs, bc, bw, bsw = (
+                    for bx, by, bf, bs, bc, bw, bsw, bsh in ft_loader:
+                        bx, by, bf, bs, bc, bw, bsw, bsh = (
                             bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                            bc.to(device), bw.to(device), bsw.to(device))
+                            bc.to(device), bw.to(device), bsw.to(device), bsh.to(device))
                         ft_optimizer.zero_grad()
-                        seg_logits, force_pred, s_pred = model(bx, bc)
+                        seg_logits, force_pred, s_pred, shape_pred = model(bx, bc)
                         loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                                + weighted_s_loss(s_pred, bs, bsw))
+                                + weighted_s_loss(s_pred, bs, bsw) + shape_criterion(shape_pred, bsh))
                         loss.backward()
                         ft_optimizer.step()
                 print(f"2단계 파인튜닝 완료 ({FT_EPOCHS} epoch, lr={FT_LR})")
@@ -788,6 +851,8 @@ if __name__ == "__main__":
                 # c_mean/c_std: 더 이상 예측 타겟 정규화용이 아니라 known input(L_M,phi)
                 # 정규화용 - config_names 순서대로 (L_M_mm, phi_deg).
                 "c_mean": c_mean, "c_std": c_std,
+                # 36번: shape_head 출력을 물리 단위로 되돌리는 데 필요(진단 스크립트도 이걸 씀).
+                "sh_mean": sh_mean, "sh_std": sh_std, "shape_names": SHAPE_NAMES,
                 "bin_width_mm": BIN_WIDTH_MM, "n_classes": N_CLASSES, "phi_range": PHI_RANGE,
                 "beta_values": BETA_VALUES, "force_names": force_names, "config_names": config_names},
                os.path.join(MODELS_DIR, "position_segment_classifier_singleprobe_beta0180_4seg.pth"))
