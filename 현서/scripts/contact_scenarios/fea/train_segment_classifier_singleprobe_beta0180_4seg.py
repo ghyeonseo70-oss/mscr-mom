@@ -148,7 +148,18 @@ def worker(args):
     rng = np.random.default_rng(2000 + widx)
     L_M_range = (0.0, 100.0)
     s_range = (10.0, 80.0)  # 팁쪽 80-100mm 제외 (힘이 너무 약해 실제 감지 불가로 판단)
-    FIXED_DEPTH = 0.10
+    # 2026-09-21(34번): 여태 FIXED_DEPTH=0.10으로 고정 샘플링해서, 합성 15만개가 전부
+    # "같은 세기로 부딪힌" 데이터였음 - 충돌 강도를 구분할 근거가 학습에 아예 없었다는 뜻.
+    # 33/34번에서 0.05/0.20mm FEA를 확보했으므로 이제 깊이도 랜덤 샘플링함.
+    # 범위 근거(34번 분석):
+    #  - 하한 0.08: 0.05mm는 힘의 67%가 0.001mN 미만(파이프라인 힘 MAE ~0.005mN보다 작음)이고
+    #    MESH_SIZE_TUBE=0.3mm 대비 관입이 1/6이라 접촉 해석 자체가 부실 -> 그 구간은 피함.
+    #  - 상한 0.20: 실측 FEA 앵커가 0.10(655행)과 0.20(74행)뿐이라 그 위는 순수 외삽.
+    #    깊이-변형이 거의 선형(원점통과 R²=0.982)이라 0.10~0.20 사이 보간은 안전함.
+    # 깊이는 CNN 입력이 아님(실제 운용에서 "얼마나 세게 부딪혔는지"는 모르는 값 = 감지 대상).
+    # 서로게이트가 자신 없는 깊이 영역은 아래 DISAGREEMENT_THRESHOLD 리젝션이 알아서 걸러줌.
+    DEPTH_RANGE = (float(os.environ.get("DEPTH_MIN", 0.08)),
+                   float(os.environ.get("DEPTH_MAX", 0.20)))
     # 2026-08-19 비판적 리뷰 #5: 앙상블 불일치(정규화 표준편차) 임계값. 환경변수로 조절 가능
     # (기본 0.5 - 대략 상위 20~30% 정도 불일치가 큰 샘플을 거름, 데이터 분포에 따라 다름).
     DISAGREEMENT_THRESHOLD = float(os.environ.get("DISAGREEMENT_THRESHOLD", 0.5))
@@ -165,7 +176,7 @@ def worker(args):
         L_M = rng.uniform(*L_M_range)
         s = rng.uniform(*s_range)
         beta = rng.choice(BETA_VALUES)  # 교수님 지시: 0도 또는 180도만
-        depth = FIXED_DEPTH
+        depth = rng.uniform(*DEPTH_RANGE)
         phi = rng.uniform(*PHI_RANGE)  # phi는 그대로 연속 샘플링(예측 대상 유지)
 
         pred, disagreement = predict_surrogate(L_M, phi, beta, s, depth)
