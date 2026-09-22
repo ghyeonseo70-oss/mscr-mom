@@ -1,0 +1,85 @@
+﻿대체모델 학습 데이터: 692개 (전체 857개 중 165개는 순수 실측 검증용으로 분리, fea_lm_phi_pos_matv2_all.json)
+=== 대체모델(10-앙상블) 5-fold R^2 (참고용) ===
+  tip_ux_avg_mm: R^2=0.875
+  tip_uy_avg_mm: R^2=0.809
+  tip_uz_avg_mm: R^2=-0.458
+  tip_theta_deg_board: R^2=0.971
+  Fx_total_N: R^2=0.957
+  Fy_total_N: R^2=0.440
+  Fz_total_N: R^2=-0.390
+  F_mag_N: R^2=0.960
+  mom_ux_avg_mm: R^2=0.835
+  mom_uy_avg_mm: R^2=0.823
+  mom_uz_avg_mm: R^2=-0.871
+  mom_theta_deg_board: R^2=0.934
+대체모델 학습 완료 (106s)
+150000개 단일관측(beta=0/180도 한정) 합성 데이터 생성 시작 (16-way 병렬)...
+s 공간가중치(s=40mm부터 100mm까지 최대 3.0배 램프): 평균=1.42, s>=100mm 샘플 수=0개
+합성 데이터 생성 완료: 150000개 (3197s), 서로게이트 불일치로 거른 샘플: 17520개
+구간별 샘플 수: {0: 13787, 1: 42527, 2: 46433, 3: 47253}
+shape_head 타겟 분포: tip_ux_avg_mm=+0.1575±0.2879, tip_uy_avg_mm=-0.0152±0.2692, tip_theta_deg_board=-0.0910±0.2793
+depth_head 타겟 분포: push_depth_mm=0.1366±0.0341mm (범위 0.080~0.200)
+|phi|>=90 힘 손실 가중치 1.5배 적용: 58267/150000개 샘플
+최종 분류기 학습 시작 (device=cpu)...
+train/val 분리: 형상(L_M,phi) 그룹 341개 중 train 306개 / val 35개 (겹치는 그룹 0개)
+Epoch [ 1/60] ValAcc  60.0%  BalAcc  59.3%  SegLoss 0.8899  ForceLoss 0.3450  SLoss 0.5449  ShapeLoss 0.4065  DepthLoss 0.8162
+Epoch [ 5/60] ValAcc  69.2%  BalAcc  70.0%  SegLoss 0.7115  ForceLoss 0.2046  SLoss 0.3741  ShapeLoss 0.1847  DepthLoss 0.5527
+Epoch [10/60] ValAcc  71.9%  BalAcc  71.6%  SegLoss 0.6389  ForceLoss 0.1767  SLoss 0.3171  ShapeLoss 0.1555  DepthLoss 0.4643
+Epoch [15/60] ValAcc  73.4%  BalAcc  73.3%  SegLoss 0.6104  ForceLoss 0.1555  SLoss 0.2904  ShapeLoss 0.1275  DepthLoss 0.4561
+Epoch [20/60] ValAcc  74.1%  BalAcc  74.5%  SegLoss 0.5992  ForceLoss 0.1284  SLoss 0.2825  ShapeLoss 0.1052  DepthLoss 0.4058
+Epoch [25/60] ValAcc  75.7%  BalAcc  75.2%  SegLoss 0.5642  ForceLoss 0.1256  SLoss 0.2445  ShapeLoss 0.1086  DepthLoss 0.3910
+Epoch [30/60] ValAcc  74.9%  BalAcc  72.9%  SegLoss 0.5820  ForceLoss 0.1445  SLoss 0.2536  ShapeLoss 0.1214  DepthLoss 0.3848
+Epoch [35/60] ValAcc  76.7%  BalAcc  76.3%  SegLoss 0.5507  ForceLoss 0.1290  SLoss 0.2425  ShapeLoss 0.1067  DepthLoss 0.3930
+Epoch [40/60] ValAcc  76.4%  BalAcc  75.7%  SegLoss 0.5406  ForceLoss 0.1288  SLoss 0.2384  ShapeLoss 0.1141  DepthLoss 0.3857
+Epoch [45/60] ValAcc  76.3%  BalAcc  75.3%  SegLoss 0.5626  ForceLoss 0.1354  SLoss 0.2433  ShapeLoss 0.1130  DepthLoss 0.3710
+Epoch [50/60] ValAcc  77.0%  BalAcc  75.6%  SegLoss 0.5358  ForceLoss 0.1230  SLoss 0.2195  ShapeLoss 0.1009  DepthLoss 0.3689
+Epoch [55/60] ValAcc  77.4%  BalAcc  77.2%  SegLoss 0.5281  ForceLoss 0.1106  SLoss 0.2189  ShapeLoss 0.1009  DepthLoss 0.3697
+Epoch [60/60] ValAcc  76.1%  BalAcc  75.6%  SegLoss 0.5499  ForceLoss 0.1191  SLoss 0.2378  ShapeLoss 0.0999  DepthLoss 0.3605
+학습 완료 (224s), 최적 epoch=48 (balanced accuracy 기준, 77.8%)
+
+=== 최종 검증 정확도: 77.4% (n_val=15566), 무작위 기준선=25.0% ===
+balanced accuracy(구간별 recall 평균): 77.8%
+구간별 recall: {'0-20mm': '79.2%', '20-40mm': '81.1%', '40-60mm': '71.7%', '60-80mm': '79.2%'}
+오답 중 인접구간 비율: 97.7%
+
+보조회귀 s(연속값): R^2=0.844, MAE=5.65mm
+
+=== 힘(F) 회귀 성능 (보드좌표계, n_val=15566) ===
+  Fx_board_N: R^2=0.751, MAE=0.0024mN
+  Fy_board_N: R^2=0.841, MAE=0.0054mN
+  F_mag(유도): R^2=0.859, MAE=0.0048mN
+
+=== 형상(shape_head) 회귀 성능 (합성-val, n_val=15566) ===
+  tip_ux_avg_mm: R^2=0.894, MAE=0.0623mm (정답값 표준편차=0.2824mm)
+  tip_uy_avg_mm: R^2=0.911, MAE=0.0540mm (정답값 표준편차=0.2815mm)
+  tip_theta_deg_board: R^2=0.891, MAE=0.0604deg (정답값 표준편차=0.2847deg)
+
+=== 충돌 세기(depth_head) 회귀 성능 (합성-val, n_val=15566) ===
+  push_depth_mm: R^2=0.642, MAE=0.0156mm (정답값 표준편차=0.0341mm)
+
+=== 순수 실측 FEA 검증 (대체모델 안 거침, n=165) ===
+
+--- [1단계(기존 파이프라인, 파인튜닝 전)] 순수 실측 FEA 검증 (n=165) ---
+  구간분류: acc=64.8%, balanced acc=60.5%
+  s(연속값): R^2=0.657, MAE=12.31mm
+    s>=60mm(팁 근처, n=69) MAE=13.10mm (재튜닝 전 기준값 9.49mm와 비교할 것)
+  Fx_board_N: R^2=0.562, MAE=0.0064mN
+    |phi|<90(n=76) R^2=0.562, MAE=0.0092mN (실제값표준편차=0.0451mN, 기준값: R^2=0.355/0.720, MAE는 25/26번 로그 참고)
+    |phi|>=90(n=89) R^2=0.506, MAE=0.0040mN (실제값표준편차=0.0119mN, 기준값: R^2=0.355/0.720, MAE는 25/26번 로그 참고)
+  Fy_board_N: R^2=0.737, MAE=0.0143mN
+  --- 형상(shape_head) ---
+    tip_ux_avg_mm: R^2=0.935, MAE=0.0655mm (정답값표준편차=0.3977mm)
+    tip_uy_avg_mm: R^2=0.865, MAE=0.0566mm (정답값표준편차=0.2670mm)
+    tip_theta_deg_board: R^2=0.915, MAE=0.0532deg (정답값표준편차=0.2854deg)
+  --- 충돌 세기(depth_head) ---
+    전체(n=165): R^2=-0.621, MAE=0.0327mm (정답값표준편차=0.0339mm)
+    가장 가까운 실측 깊이로 판정 시 balanced acc=44.9% (37번 상한선 70.0%, 무작위 33.3%)
+      0.05mm(n= 28): 정확도   3.6%, 예측 평균 0.1192mm ⚠️학습범위 밖(외삽)
+      0.10mm(n=125): 정확도  89.6%, 예측 평균 0.1173mm
+      0.20mm(n= 12): 정확도  41.7%, 예측 평균 0.1467mm
+
+2단계 파인튜닝 스킵됨 (FINETUNE_ON_REAL=0)
+
+저장: C:\Users\gustj\Desktop\김현서\김현서\홀센서 코드\현서\scripts\contact_scenarios\fea\..\..\..\models/position_segment_classifier_singleprobe_beta0180_4seg.pth
+
+총 소요시간: 59.3분
