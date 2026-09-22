@@ -58,10 +58,12 @@ class Net(nn.Module):
         self.force_head = nn.Linear(128, 2)
         self.s_head = nn.Linear(128, 1)
         self.shape_head = nn.Linear(128, n_shape)
+        # 2026-09-22(38번): depth_head 추가 - 체크포인트 키를 맞추려면 여기도 있어야 함.
+        self.depth_head = nn.Linear(128, 1)
 
     def forward(self, x, config):
         h = self.trunk(torch.cat([self.encoder(x[:, 0]), config], dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.shape_head(h)
+        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.shape_head(h), self.depth_head(h).squeeze(-1)
 
 
 sensors = magpy.Collection([magpy.Sensor(position=(x, y, 15))
@@ -112,7 +114,7 @@ for r in holdout:
 
 X, cs = np.array(X, dtype=np.float32), np.array(cs, dtype=np.float32)
 with torch.no_grad():
-    *_, sh_pred = net(torch.tensor(((X - ck["X_mean"]) / ck["X_std"])[:, None]).float(),
+    *_, sh_pred, _ = net(torch.tensor(((X - ck["X_mean"]) / ck["X_std"])[:, None]).float(),
                        torch.tensor((cs - ck["c_mean"]) / ck["c_std"]).float())
 sh_pred = sh_pred.numpy() * ck["sh_std"] + ck["sh_mean"]
 sh_true = np.array([[r[t] for t in SHAPE_NAMES] for r in keep], dtype=np.float32)

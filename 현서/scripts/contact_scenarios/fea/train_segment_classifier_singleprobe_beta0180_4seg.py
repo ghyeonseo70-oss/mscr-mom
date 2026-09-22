@@ -53,6 +53,17 @@ MOM_TARGETS_MISSING_OLD_DATA = ["mom_ux_avg_mm", "mom_uy_avg_mm", "mom_uz_avg_mm
 # 서로게이트 난이도도 낮음(tip_theta R^2=0.97, tip_ux 0.88 vs 문제의 Fy_total_N 0.44).
 SHAPE_NAMES = ["tip_ux_avg_mm", "tip_uy_avg_mm", "tip_theta_deg_board"]
 
+# 2026-09-22(38번) depth_head: 충돌 "세기"(인덴터 관입 깊이)를 별도 출력으로 예측.
+# 왜 필요한가 - shape_head는 "결과"(팁이 얼마나 휘었나)만 맞히는데, 팁 변위는
+#   팁변위 = 이득(L_M,phi,s) x 깊이^~1.2
+# 라서 **결과 하나로는 원인 둘(위치, 세기)을 분리할 수 없음**. 실제로 깊이 0.10mm 고정
+# 데이터만 봐도 접촉 위치에 따라 팁 이동 중앙값이 0.568mm(베이스쪽)~0.111mm(팁쪽)로
+# 5배 차이남. 36번에서 깊이를 랜덤화하자 위치 정확도가 떨어진 것도 이 혼동 탓으로 추정.
+# 37번에서 "자기장에 깊이 정보가 실재함"을 확인했으므로(깊이 3클래스 분류 70.0% vs
+# 대조군 35.6%) 정보 부족이 아니라 **모델에게 분리하라고 요구한 적이 없는 게 문제**.
+# 깊이를 명시적 출력으로 만들어 위치/세기 분리를 강제함.
+DEPTH_NAME = "push_depth_mm"
+
 # (예전엔 여기에 L_M=0 근처 연속회귀 실패 문제를 우회하는 lm_zero_head/LM_ZERO_THRESHOLD_MM가
 # 있었음 - 2026-09-11에 L_M을 아예 예측 대상에서 빼고 known input으로 바꾸면서 그 우회
 # 자체가 필요 없어져 제거함. 자세한 배경은 SingleProbeClassifier 클래스 docstring 참고.)
@@ -185,6 +196,7 @@ def worker(args):
     # 정답으로도 저장함. 보드좌표계 원본값(축교환 전)을 그대로 씀 - 실측 FEA 행의
     # tip_ux_avg_mm/tip_uy_avg_mm/tip_theta_deg_board와 같은 정의여야 홀드아웃 평가가 맞음.
     shb = np.zeros((n_chunk, len(SHAPE_NAMES)), dtype=np.float32)
+    dpb = np.zeros(n_chunk, dtype=np.float32)  # 38번: depth_head 정답(충돌 세기)
     n_ok = 0
     while n_ok < n_chunk:
         L_M = rng.uniform(*L_M_range)
@@ -232,8 +244,9 @@ def worker(args):
         sb[n_ok] = s
         cb[n_ok] = [L_M, phi]
         shb[n_ok] = [pred[t] for t in SHAPE_NAMES]
+        dpb[n_ok] = depth
         n_ok += 1
-    return Xb, yb, fb, sb, cb, shb, n_rejected
+    return Xb, yb, fb, sb, cb, shb, dpb, n_rejected
 
 
 class SingleProbeClassifier(nn.Module):
@@ -266,13 +279,15 @@ class SingleProbeClassifier(nn.Module):
         self.s_head = nn.Linear(128, 1)
         # 2026-09-21(36번) 신규: 충돌 시 팁 변위/회전(=형상) 직접 예측. SHAPE_NAMES 주석 참고.
         self.shape_head = nn.Linear(128, n_shape)
+        # 2026-09-22(38번) 신규: 충돌 세기(관입 깊이) 예측 - DEPTH_NAME 주석 참고.
+        self.depth_head = nn.Linear(128, 1)
 
     def forward(self, x, config):
         """config: 정규화된 (L_M_mm, phi_deg) - 이미 아는 값, B-field와 함께 trunk에 들어감."""
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds + [config], dim=1))
         return (self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1),
-                self.shape_head(h))
+                self.shape_head(h), self.depth_head(h).squeeze(-1))
 
 
 if __name__ == "__main__":
@@ -385,7 +400,8 @@ if __name__ == "__main__":
     s_all = np.concatenate([r[3] for r in results], axis=0)
     c_all = np.concatenate([r[4] for r in results], axis=0)
     sh_all = np.concatenate([r[5] for r in results], axis=0)  # 36번: shape_head 정답
-    n_rejected_total = sum(r[6] for r in results)
+    dp_all = np.concatenate([r[6] for r in results], axis=0)  # 38번: depth_head 정답
+    n_rejected_total = sum(r[7] for r in results)
     s_weight_all = s_spatial_weight(s_all).astype(np.float32)
     print(f"s 공간가중치(s={S_WEIGHT_RAMP_START_MM:.0f}mm부터 {S_WEIGHT_RAMP_END_MM:.0f}mm까지 "
           f"최대 {S_WEIGHT_MAX}배 램프): 평균={s_weight_all.mean():.2f}, "
@@ -395,7 +411,7 @@ if __name__ == "__main__":
     print("구간별 샘플 수:", {c: int((y_all == c).sum()) for c in range(N_CLASSES)})
 
     np.savez(os.path.join(FEA_DATA_DIR, "segment_bfield_singleprobe_beta0180_4seg.npz"),
-             X=X_all, y=y_all, f=f_all, s=s_all, c=c_all, sh=sh_all)
+             X=X_all, y=y_all, f=f_all, s=s_all, c=c_all, sh=sh_all, dp=dp_all)
 
     fxy_all = f_all[:, :2]
     f_mean, f_std = fxy_all.mean(axis=0), fxy_all.std(axis=0)
@@ -409,6 +425,12 @@ if __name__ == "__main__":
     sh_norm = (sh_all - sh_mean) / sh_std
     print(f"shape_head 타겟 분포: " + ", ".join(
         f"{n}={m:+.4f}±{s:.4f}" for n, m, s in zip(SHAPE_NAMES, sh_mean, sh_std)))
+
+    dp_mean, dp_std = dp_all.mean(), dp_all.std()
+    dp_std = dp_std if dp_std > 1e-12 else 1.0
+    dp_norm = (dp_all - dp_mean) / dp_std
+    print(f"depth_head 타겟 분포: {DEPTH_NAME}={dp_mean:.4f}±{dp_std:.4f}mm "
+          f"(범위 {dp_all.min():.3f}~{dp_all.max():.3f})")
 
     s_mean, s_std = s_all.mean(), s_all.std()
     s_norm = (s_all - s_mean) / s_std
@@ -462,7 +484,8 @@ if __name__ == "__main__":
                       torch.tensor(c_norm[train_idx]).float(),
                       torch.tensor(phi_weight_all[train_idx]).float(),
                       torch.tensor(s_weight_all[train_idx]).float(),
-                      torch.tensor(sh_norm[train_idx]).float()),
+                      torch.tensor(sh_norm[train_idx]).float(),
+                      torch.tensor(dp_norm[train_idx]).float()),
         batch_size=256, shuffle=True)
     val_X = torch.tensor(X_norm[val_idx]).float().to(device)
     val_y = torch.tensor(y_all[val_idx]).long().to(device)
@@ -476,6 +499,8 @@ if __name__ == "__main__":
     val_s_weight = torch.tensor(s_weight_all[val_idx]).float().to(device)
     val_sh = torch.tensor(sh_norm[val_idx]).float().to(device)
     val_sh_phys = sh_all[val_idx]
+    val_dp = torch.tensor(dp_norm[val_idx]).float().to(device)
+    val_dp_phys = dp_all[val_idx]
 
     # 2026-08-26 추가: 여기까지 최종 CNN(SingleProbeClassifier) 학습에는 시드 고정이 전혀
     # 없었음(대체모델 앙상블만 seed=i로 고정돼있었음) - 가중치 초기화, DataLoader shuffle이
@@ -491,6 +516,7 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
     seg_criterion = nn.CrossEntropyLoss()
     shape_criterion = nn.MSELoss()  # 36번: shape_head. 정규화된 공간이라 가중치 1.0으로 시작.
+    depth_criterion = nn.MSELoss()  # 38번: depth_head(충돌 세기). 마찬가지로 1.0.
     # 2026-08-19 비판적 리뷰 #1 (2026-09-14 재검토): 그 시점엔 대체모델 5-fold R^2가
     # Fy_total_N=-0.01(노이즈)이라 이 축 loss를 1/10로 깎았었음. 그 이후 데이터가 늘어서
     # (지금 518개) 같은 진단이 R^2=0.649로 나와 "노이즈라 못 배운다"는 전제가 깨졌길래
@@ -525,23 +551,25 @@ if __name__ == "__main__":
     best_epoch = -1
     for epoch in range(N_EPOCHS):
         model.train()
-        for bx, by, bf, bs, bc, bw, bsw, bsh in train_loader:
-            bx, by, bf, bs, bc, bw, bsw, bsh = (bx.to(device), by.to(device), bf.to(device),
-                                                 bs.to(device), bc.to(device), bw.to(device),
-                                                 bsw.to(device), bsh.to(device))
+        for bx, by, bf, bs, bc, bw, bsw, bsh, bdp in train_loader:
+            bx, by, bf, bs, bc, bw, bsw, bsh, bdp = (bx.to(device), by.to(device), bf.to(device),
+                                                      bs.to(device), bc.to(device), bw.to(device),
+                                                      bsw.to(device), bsh.to(device), bdp.to(device))
             optimizer.zero_grad()
-            seg_logits, force_pred, s_pred, shape_pred = model(bx, bc)
+            seg_logits, force_pred, s_pred, shape_pred, depth_pred = model(bx, bc)
             loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                    + weighted_s_loss(s_pred, bs, bsw) + shape_criterion(shape_pred, bsh))
+                    + weighted_s_loss(s_pred, bs, bsw) + shape_criterion(shape_pred, bsh)
+                    + depth_criterion(depth_pred, bdp))
             loss.backward()
             optimizer.step()
         model.eval()
         with torch.no_grad():
-            val_seg_logits, val_force_pred, val_s_pred, val_shape_pred = model(val_X, val_c)
+            val_seg_logits, val_force_pred, val_s_pred, val_shape_pred, val_depth_pred = model(val_X, val_c)
             val_seg_loss = seg_criterion(val_seg_logits, val_y).item()
             val_force_loss = weighted_force_loss(val_force_pred, val_f, val_phi_weight).item()
             val_s_loss = weighted_s_loss(val_s_pred, val_s, val_s_weight).item()
             val_shape_loss = shape_criterion(val_shape_pred, val_sh).item()
+            val_depth_loss = depth_criterion(val_depth_pred, val_dp).item()
             val_pred_epoch = val_seg_logits.argmax(dim=1)
             val_acc = (val_pred_epoch == val_y).float().mean().item()
             # 2026-08-19 비판적 리뷰 #4: 체크포인트를 "손실 단순합" 대신 실제 목표인
@@ -558,17 +586,18 @@ if __name__ == "__main__":
             best_state = {k: v.clone() for k, v in model.state_dict().items()}
             best_epoch = epoch + 1
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ShapeLoss {val_shape_loss:.4f}")
+            print(f"Epoch [{epoch+1:2d}/{N_EPOCHS}] ValAcc {val_acc*100:5.1f}%  BalAcc {bal_acc*100:5.1f}%  SegLoss {val_seg_loss:.4f}  ForceLoss {val_force_loss:.4f}  SLoss {val_s_loss:.4f}  ShapeLoss {val_shape_loss:.4f}  DepthLoss {val_depth_loss:.4f}")
     print(f"학습 완료 ({time.time()-t_train:.0f}s), 최적 epoch={best_epoch} (balanced accuracy 기준, {best_bal_acc*100:.1f}%)")
 
     model.load_state_dict(best_state)
     model.eval()
     with torch.no_grad():
-        val_seg_logits, val_force_pred, val_s_pred, val_shape_pred = model(val_X, val_c)
+        val_seg_logits, val_force_pred, val_s_pred, val_shape_pred, val_depth_pred = model(val_X, val_c)
         val_pred = val_seg_logits.argmax(dim=1)
         val_force_pred_phys = val_force_pred.cpu().numpy() * f_std + f_mean
         val_s_pred_phys = val_s_pred.cpu().numpy() * s_std + s_mean
         val_shape_pred_phys = val_shape_pred.cpu().numpy() * sh_std + sh_mean
+        val_depth_pred_phys = val_depth_pred.cpu().numpy() * dp_std + dp_mean
     final_acc = (val_pred == val_y).float().mean().item()
     conf = torch.zeros(N_CLASSES, N_CLASSES, dtype=torch.int32)
     for t, p in zip(val_y.tolist(), val_pred.tolist()):
@@ -618,6 +647,14 @@ if __name__ == "__main__":
         print(f"  {name}: R^2={r2:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.4f}{unit} "
               f"(정답값 표준편차={true_i.std():.4f}{unit})")
 
+    # 2026-09-22(38번): depth_head - 충돌 세기.
+    ss_res = np.sum((val_depth_pred_phys - val_dp_phys) ** 2)
+    ss_tot = np.sum((val_dp_phys - val_dp_phys.mean()) ** 2)
+    print(f"\n=== 충돌 세기(depth_head) 회귀 성능 (합성-val, n_val={len(val_idx)}) ===")
+    print(f"  {DEPTH_NAME}: R^2={1 - ss_res/ss_tot if ss_tot > 0 else float('nan'):.3f}, "
+          f"MAE={np.mean(np.abs(val_depth_pred_phys - val_dp_phys)):.4f}mm "
+          f"(정답값 표준편차={val_dp_phys.std():.4f}mm)")
+
     # 2026-09-11: L_M,phi는 더 이상 모델이 예측하는 값이 아니라 known input(config_names
     # 순서로 val_c/val_c_phys에 그대로 들어있음)이라, 여기서 정확도를 "리포트"할 대상 자체가
     # 없음(입력=정답이라 R^2가 항상 1). L_M=0 근처 회귀 불안정 문제(이전 lm_zero_head로
@@ -656,7 +693,7 @@ if __name__ == "__main__":
     # 2026-09-07 리팩터: 이 실측 행 -> B-field 배열 변환 로직을 함수로 뽑아서
     # real_holdout_rows뿐 아니라 fit_rows(파인튜닝용)에도 재사용.
     def rows_to_arrays(rows):
-        Xs, ys, fs, ss, cs, shs = [], [], [], [], [], []
+        Xs, ys, fs, ss, cs, shs, dps = [], [], [], [], [], [], []
         for r in rows:
             L_M, phi = r["L_M_mm"], r["phi_deg"]
             s = r["contact_s_mm"]
@@ -682,9 +719,10 @@ if __name__ == "__main__":
             ss.append(s)
             cs.append([L_M, phi])  # config_names=["L_M_mm","phi_deg"]와 동일 순서
             shs.append([r[t] for t in SHAPE_NAMES])  # 36번: 실측 FEA의 진짜 팁 변위/회전
-        return Xs, ys, fs, ss, cs, shs
+            dps.append(r.get(DEPTH_NAME, 0.10))      # 38번: 실측 FEA의 진짜 충돌 세기
+        return Xs, ys, fs, ss, cs, shs, dps
 
-    real_X, real_y, real_f, real_s, real_c, real_sh = rows_to_arrays(real_holdout_rows)
+    real_X, real_y, real_f, real_s, real_c, real_sh, real_dp = rows_to_arrays(real_holdout_rows)
 
     if len(real_X) < 5:
         print(f"  free-shape 계산 성공 케이스가 {len(real_X)}개뿐이라 통계적으로 의미 있는 평가 불가")
@@ -696,6 +734,7 @@ if __name__ == "__main__":
         real_s_arr = np.array(real_s, dtype=np.float32)
         real_c_arr = np.array(real_c, dtype=np.float32)
         real_sh_arr = np.array(real_sh, dtype=np.float32)  # 36번: 형상 정답(실측 FEA)
+        real_dp_arr = np.array(real_dp, dtype=np.float32)  # 38번: 충돌 세기 정답(실측 FEA)
         # L_M,phi는 실측 FEA 행에도 이미 정답으로 들어있는 known input이라(예측할 필요
         # 없음), 여기서 정규화해서 model.forward()의 config 입력으로 그대로 씀.
         real_c_norm = (real_c_arr - c_mean) / c_std
@@ -707,11 +746,12 @@ if __name__ == "__main__":
             with torch.no_grad():
                 rX = torch.tensor(real_X_norm[:, None]).float().to(device)  # (n,1,3,5,5)
                 rC = torch.tensor(real_c_norm).float().to(device)  # known L_M,phi 입력
-                r_seg_logits, r_force_pred, r_s_pred, r_shape_pred = model(rX, rC)
+                r_seg_logits, r_force_pred, r_s_pred, r_shape_pred, r_depth_pred = model(rX, rC)
                 r_pred_class = r_seg_logits.argmax(dim=1).cpu().numpy()
                 r_force_phys = r_force_pred.cpu().numpy() * f_std + f_mean
                 r_s_phys = r_s_pred.cpu().numpy() * s_std + s_mean
                 r_shape_phys = r_shape_pred.cpu().numpy() * sh_std + sh_mean
+                r_depth_phys = r_depth_pred.cpu().numpy() * dp_std + dp_mean
 
             print(f"\n--- [{label}] 순수 실측 FEA 검증 (n={len(real_y_arr)}) ---")
             real_acc = float((r_pred_class == real_y_arr).mean())
@@ -772,6 +812,28 @@ if __name__ == "__main__":
                 print(f"    {name}: R^2={r2_sh:.3f}, MAE={np.mean(np.abs(pred_i - true_i)):.4f}{unit} "
                       f"(정답값표준편차={true_i.std():.4f}{unit})")
 
+            # 2026-09-22(38번): 충돌 세기. 실측 깊이는 0.05/0.10/0.20 세 값뿐이라
+            # 회귀 지표와 함께 "가장 가까운 실측 깊이로 반올림했을 때의 정확도"도 같이 봄
+            # (37번 식별가능성 테스트의 상한선 70.0%와 직접 비교 가능).
+            # ⚠️ 학습 범위가 0.08~0.20이라 0.05mm 행은 외삽 - 따로 떼어 표시함.
+            print(f"  --- 충돌 세기(depth_head) ---")
+            ss_res_d = np.sum((r_depth_phys - real_dp_arr) ** 2)
+            ss_tot_d = np.sum((real_dp_arr - real_dp_arr.mean()) ** 2)
+            r2_d = 1 - ss_res_d / ss_tot_d if ss_tot_d > 0 else float("nan")
+            print(f"    전체(n={len(real_dp_arr)}): R^2={r2_d:.3f}, "
+                  f"MAE={np.mean(np.abs(r_depth_phys - real_dp_arr)):.4f}mm "
+                  f"(정답값표준편차={real_dp_arr.std():.4f}mm)")
+            lv = np.unique(real_dp_arr)
+            snapped = lv[np.argmin(np.abs(r_depth_phys[:, None] - lv[None, :]), axis=1)]
+            per_cls = [np.mean(snapped[real_dp_arr == v] == v) for v in lv]
+            print(f"    가장 가까운 실측 깊이로 판정 시 balanced acc="
+                  f"{np.mean(per_cls)*100:.1f}% (37번 상한선 70.0%, 무작위 {100/len(lv):.1f}%)")
+            for v, acc in zip(lv, per_cls):
+                m = real_dp_arr == v
+                tag = " ⚠️학습범위 밖(외삽)" if v < 0.08 else ""
+                print(f"      {v:.2f}mm(n={int(m.sum()):3d}): 정확도 {acc*100:5.1f}%, "
+                      f"예측 평균 {r_depth_phys[m].mean():.4f}mm{tag}")
+
         evaluate_real("1단계(기존 파이프라인, 파인튜닝 전)")
 
         # ============================================================
@@ -785,7 +847,7 @@ if __name__ == "__main__":
         # ============================================================
         FINETUNE_ON_REAL = int(os.environ.get("FINETUNE_ON_REAL", 1))
         if FINETUNE_ON_REAL:
-            ft_X, ft_y, ft_f, ft_s, ft_c, ft_sh = rows_to_arrays(fit_rows)
+            ft_X, ft_y, ft_f, ft_s, ft_c, ft_sh, ft_dp = rows_to_arrays(fit_rows)
             if len(ft_X) < 20:
                 print(f"\n2단계 파인튜닝 스킵: 실측 fit_rows 중 free-shape 계산 성공이 "
                       f"{len(ft_X)}개뿐(20개 미만)")
@@ -800,6 +862,7 @@ if __name__ == "__main__":
                 ft_c_arr = np.array(ft_c, dtype=np.float32)
                 ft_c_norm = (ft_c_arr - c_mean) / c_std  # known L_M,phi 입력(정규화)
                 ft_sh_norm = (np.array(ft_sh, dtype=np.float32) - sh_mean) / sh_std  # 36번
+                ft_dp_norm = (np.array(ft_dp, dtype=np.float32) - dp_mean) / dp_std  # 38번
                 ft_phi_weight = np.where(np.abs(ft_c_arr[:, 1]) >= 90, HIGH_PHI_WEIGHT, 1.0).astype(np.float32)
                 ft_s_weight = s_spatial_weight(ft_s_arr).astype(np.float32)
 
@@ -815,7 +878,8 @@ if __name__ == "__main__":
                 ft_tensors = [torch.tensor(ft_X_norm[:, None]).float(), torch.tensor(ft_y_arr).long(),
                               torch.tensor(ft_f_norm).float(), torch.tensor(ft_s_norm).float(),
                               torch.tensor(ft_c_norm).float(), torch.tensor(ft_phi_weight).float(),
-                              torch.tensor(ft_s_weight).float(), torch.tensor(ft_sh_norm).float()]
+                              torch.tensor(ft_s_weight).float(), torch.tensor(ft_sh_norm).float(),
+                              torch.tensor(ft_dp_norm).float()]
                 ft_dataset = TensorDataset(*[t[oversample_idx] for t in ft_tensors])
                 FT_EPOCHS = int(os.environ.get("FT_EPOCHS", 15))
                 FT_LR = float(os.environ.get("FT_LR", 5e-5))  # 기존 lr(1e-3)의 1/20 - 150k 합성
@@ -826,14 +890,16 @@ if __name__ == "__main__":
 
                 model.train()
                 for ft_epoch in range(FT_EPOCHS):
-                    for bx, by, bf, bs, bc, bw, bsw, bsh in ft_loader:
-                        bx, by, bf, bs, bc, bw, bsw, bsh = (
+                    for bx, by, bf, bs, bc, bw, bsw, bsh, bdp in ft_loader:
+                        bx, by, bf, bs, bc, bw, bsw, bsh, bdp = (
                             bx.to(device), by.to(device), bf.to(device), bs.to(device),
-                            bc.to(device), bw.to(device), bsw.to(device), bsh.to(device))
+                            bc.to(device), bw.to(device), bsw.to(device), bsh.to(device),
+                            bdp.to(device))
                         ft_optimizer.zero_grad()
-                        seg_logits, force_pred, s_pred, shape_pred = model(bx, bc)
+                        seg_logits, force_pred, s_pred, shape_pred, depth_pred = model(bx, bc)
                         loss = (seg_criterion(seg_logits, by) + weighted_force_loss(force_pred, bf, bw)
-                                + weighted_s_loss(s_pred, bs, bsw) + shape_criterion(shape_pred, bsh))
+                                + weighted_s_loss(s_pred, bs, bsw) + shape_criterion(shape_pred, bsh)
+                                + depth_criterion(depth_pred, bdp))
                         loss.backward()
                         ft_optimizer.step()
                 print(f"2단계 파인튜닝 완료 ({FT_EPOCHS} epoch, lr={FT_LR})")
@@ -853,6 +919,8 @@ if __name__ == "__main__":
                 "c_mean": c_mean, "c_std": c_std,
                 # 36번: shape_head 출력을 물리 단위로 되돌리는 데 필요(진단 스크립트도 이걸 씀).
                 "sh_mean": sh_mean, "sh_std": sh_std, "shape_names": SHAPE_NAMES,
+                # 38번: depth_head 출력을 물리 단위(mm)로 되돌리는 데 필요.
+                "dp_mean": dp_mean, "dp_std": dp_std, "depth_name": DEPTH_NAME,
                 "bin_width_mm": BIN_WIDTH_MM, "n_classes": N_CLASSES, "phi_range": PHI_RANGE,
                 "beta_values": BETA_VALUES, "force_names": force_names, "config_names": config_names},
                os.path.join(MODELS_DIR, "position_segment_classifier_singleprobe_beta0180_4seg.pth"))

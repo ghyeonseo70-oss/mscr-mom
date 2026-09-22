@@ -85,11 +85,13 @@ class SingleProbeClassifier(nn.Module):
         self.s_head = nn.Linear(128, 1)
         # 2026-09-21(36번): shape_head 추가 - 체크포인트 키를 맞추려면 여기도 있어야 함.
         self.shape_head = nn.Linear(128, 3)
+        # 2026-09-22(38번): depth_head 추가 - 체크포인트 키를 맞추려면 여기도 있어야 함.
+        self.depth_head = nn.Linear(128, 1)
 
     def forward(self, x, config):
         embeds = [self.encoder(x[:, p]) for p in range(self.n_probes)]
         h = self.trunk(torch.cat(embeds + [config], dim=1))
-        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.shape_head(h)
+        return self.seg_head(h), self.force_head(h), self.s_head(h).squeeze(-1), self.shape_head(h), self.depth_head(h).squeeze(-1)
 
 
 # 2026-09-21(36번): shape_head 도입 과도기라 체크포인트에 shape_head가 있을 수도 없을 수도
@@ -154,7 +156,7 @@ fs, cs = np.array(fs, dtype=np.float32), np.array(cs, dtype=np.float32)
 is_old = np.array(is_old)
 
 with torch.no_grad():
-    seg, force, s_pred, _ = cnn(torch.tensor(((X - X_mean2) / X_std2)[:, None]).float(),
+    seg, force, s_pred, _, _ = cnn(torch.tensor(((X - X_mean2) / X_std2)[:, None]).float(),
                               torch.tensor((cs - c_mean) / c_std).float())
     pred_class = seg.argmax(dim=1).numpy()
     force_phys = force.numpy() * f_std + f_mean

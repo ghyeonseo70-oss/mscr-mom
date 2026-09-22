@@ -44,7 +44,7 @@ def is_holdout_row(r, frac=0.2):
 
 
 class Net(nn.Module):
-    def __init__(self, n_shape=0):
+    def __init__(self, n_shape=0, has_depth=False):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv2d(3, 16, 3, padding=1), nn.BatchNorm2d(16), nn.ReLU(),
@@ -54,8 +54,12 @@ class Net(nn.Module):
         self.seg_head = nn.Linear(128, N_CLASSES)
         self.force_head = nn.Linear(128, 2)
         self.s_head = nn.Linear(128, 1)
+        # 이 진단은 세대가 다른 체크포인트들(깊이고정/랜덤/shape/depth)을 나란히 비교하는
+        # 용도라, 있는 헤드만 만들어야 state_dict 키가 맞음.
         if n_shape:
             self.shape_head = nn.Linear(128, n_shape)
+        if has_depth:
+            self.depth_head = nn.Linear(128, 1)
 
     def forward(self, x, config):
         h = self.trunk(torch.cat([self.encoder(x[:, 0]), config], dim=1))
@@ -121,7 +125,8 @@ rows_out = []
 for ck_label, ck_file in CKPTS:
     ck = torch.load(os.path.join(MODELS_DIR, ck_file), map_location="cpu", weights_only=False)
     sd = ck["state_dict"]
-    net = Net(n_shape=sd["shape_head.weight"].shape[0] if "shape_head.weight" in sd else 0)
+    net = Net(n_shape=sd["shape_head.weight"].shape[0] if "shape_head.weight" in sd else 0,
+              has_depth="depth_head.weight" in sd)
     net.load_state_dict(sd)
     net.eval()
     with torch.no_grad():
