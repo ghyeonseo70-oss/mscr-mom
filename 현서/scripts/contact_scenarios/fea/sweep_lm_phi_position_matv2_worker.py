@@ -45,6 +45,19 @@ parser.add_argument("--push_depth", type=float, default=None,
                           "형상 추정으로 방향 전환하면서 '충돌 강도에 따라 얼마나 더 휘는지'를 "
                           "배우려면 깊이가 여러 값이어야 하는데 기존 518개가 전부 0.10mm라 "
                           "그 축의 데이터가 아예 없었음(PROJECT_STATUS.md 30번 참고).")
+parser.add_argument("--contact_mesh_size", type=float, default=None,
+                     help="2026-10-06 추가: 접촉부(볼 주변 튜브 표면) 국소 메쉬 세밀화 크기(mm). "
+                          "None이면 기존과 동일(전역 0.3mm 그대로). 큰 push_depth(0.15mm+)에서 "
+                          "압입 깊이가 메쉬 한 칸(0.3mm)보다 작아 생기던 수렴 실패를 줄이기 위해 "
+                          "추가 - _test_bigdepth_fix.py로 0.08mm/반경0.6mm 조합 검증함(실패 "
+                          "케이스 중 1개가 성공으로 바뀜, 나머지 1개는 더 극단적 조합이라 여전히 "
+                          "실패 - 만능은 아님).")
+parser.add_argument("--contact_refine_radius", type=float, default=None,
+                     help="접촉부 세밀화 적용 반경(mm), None이면 ball_r*2.5 기본값.")
+parser.add_argument("--min_inc", type=float, default=None,
+                     help="2026-10-06 추가: CalculiX 최소 증분(min_inc) 명시 - 기본값(~1e-5)보다 "
+                          "작게 주면 실패 직전까지 더 잘게 쪼개서 재시도할 여지가 생김. "
+                          "큰 push_depth에서 '증분 쪼개다 포기'하는 실패 패턴에 대응.")
 args = parser.parse_args()
 
 L_M, phi, beta, tag = args.L_M, args.phi, args.beta, args.tag
@@ -88,12 +101,14 @@ for n, contact_s in enumerate(S_LIST, 1):
     try:
         scene_info = scene.build_mesh(contact_s=contact_s, ball_r=BALL_R, verbose=False,
                                        centerline_path=centerline_path, beta_deg=beta,
-                                       inp_name=inp_name, sets_name=sets_name)
+                                       inp_name=inp_name, sets_name=sets_name,
+                                       contact_mesh_size=args.contact_mesh_size,
+                                       contact_refine_radius=args.contact_refine_radius)
         normal = scene_info["normal"]
         res = rc.run_case(
             PUSH_DEPTH, inp_name=inp_name, sets_name=sets_name, job_name=job_name,
             timeout=1800, verbose=False, push_dir=tuple(normal), n_threads=args.threads,
-            print_tip=True, print_mom=True, stabilize=stabilize_arg,
+            print_tip=True, print_mom=True, stabilize=stabilize_arg, min_inc=args.min_inc,
         )
     except Exception as e:
         print(f"  [{tag}] 실패: {e}", flush=True)

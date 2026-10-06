@@ -172,7 +172,12 @@ def main():
             subprocess.run(
                 [sys.executable, "-u", os.path.join(HERE, "sweep_lm_phi_position_matv2_worker.py"),
                  "--L_M", str(lm), "--phi", str(phi), "--beta", "0", "--tag", tag,
-                 "--threads", str(args.threads), "--s_list", s_arg, "--push_depth", str(depth)],
+                 "--threads", str(args.threads), "--s_list", s_arg, "--push_depth", str(depth),
+                 # 2026-10-06 추가: 접촉부 국소 메쉬 세밀화 + 최소증분 축소 - 큰 depth에서
+                 # 수렴 실패율이 높았던 문제 대응(_test_bigdepth_fix.py로 검증, 2케이스 중
+                 # 1케이스 성공으로 전환 확인됨 - 완전한 해결은 아니고 개선 정도로 볼 것).
+                 "--contact_mesh_size", "0.08", "--contact_refine_radius", "0.6",
+                 "--min_inc", "1e-8"],
                 stdout=logf, stderr=subprocess.STDOUT, encoding="utf-8", errors="replace",
             )
         return tag, len(s_list)

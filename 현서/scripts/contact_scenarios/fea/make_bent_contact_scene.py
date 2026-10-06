@@ -93,7 +93,20 @@ def _offset_into_wall(p, r_offset):
 def build_mesh(contact_s, ball_r=0.4, gap0=0.02, mesh_size_ball=MESH_SIZE_BALL,
                centerline_path=None, inp_name="bent_contact_mesh.inp",
                sets_name="bent_contact_node_sets.inp", verbose=True, beta_deg=0.0,
-               include_wire=False):
+               include_wire=False, contact_mesh_size=None, contact_refine_radius=None):
+    """
+    contact_mesh_size: 2026-10-06 추가 - 튜브 표면 중 "볼이 실제로 닿는 지점" 근처를
+    이 크기로 국소 세밀화(None이면 기존과 동일하게 안 함, 전역 MESH_SIZE_TUBE=0.3mm 그대로).
+    큰 push_depth(0.15~0.20mm+)에서 접촉 수렴 실패가 잦았던 원인 중 하나가 "압입 깊이보다
+    메쉬 한 칸이 더 커서(0.3mm) 그 작은 변형을 표현할 해상도가 없었다"는 것으로 확인됨
+    (PROJECT_STATUS.md 참고) - 볼(인덴터) 자체는 강체 흉내용 재질이라 이미 곱게(0.15mm)
+    되어 있었지만, 정작 눌려서 변형되는 튜브 쪽은 그대로 0.3mm였던 게 빠진 부분이었음.
+    gmsh의 Ball 필드(접촉점 중심으로 거리에 따라 메쉬 크기를 부드럽게 보간)로 구현 -
+    볼 위치는 contact_s/beta_deg마다 매번 새로 계산되므로 이 필드도 자동으로 그 위치를 따라감
+    (고정 좌표가 아니라 "볼과의 거리" 기준이라 좌표를 미리 알 필요 없음).
+    contact_refine_radius: 세밀화 적용 반경(None이면 ball_r*2.5 기본값 - 압입 접촉면적보다
+    여유 있게 덮기 위함).
+    """
     """include_wire: 2026-08-18 추가 실험 기능(니티놀 와이어, K1 구간). 기본값 False로 명시적
     opt-in 필요 - 이전에 이 플래그 없이 함수 자체를 바로 고쳐서, 이미 돌고 있던(와이어와 무관한)
     matv2 재료값 검증 스윕이 새로 시작하는 조합부터 의도치 않게 와이어 코드를 타는 사고가
@@ -225,7 +238,26 @@ def build_mesh(contact_s, ball_r=0.4, gap0=0.02, mesh_size_ball=MESH_SIZE_BALL,
     gmsh.model.mesh.setSize(gmsh.model.getBoundary([(3, ball_tag)], recursive=True), mesh_size_ball)
     # 1D 빔(wire_beam_curve)은 3D 솔리드처럼 극단적으로 세밀할 필요 없음(embed 제약이 요소
     # 크기와 무관하게 호스트 요소 안 위치로 절점을 묶어줌) - 전역 Min/Max 범위 내 기본 분할로 충분.
-    gmsh.option.setNumber("Mesh.MeshSizeMin", mesh_size_ball)
+    global_min = mesh_size_ball
+    if contact_mesh_size is not None:
+        # 2026-10-06 추가: 볼 중심(ball_center)으로부터의 거리 기준으로 메쉬 크기를 부드럽게
+        # 보간하는 Ball 필드 - "고정 좌표"가 아니라 "볼과의 거리"가 기준이라, contact_s가
+        # 케이스마다 달라져도(볼 위치가 매번 다름) 이 필드는 그때그때 자동으로 그 위치를 따라감.
+        refine_r = contact_refine_radius if contact_refine_radius is not None else ball_r * 2.5
+        field_tag = gmsh.model.mesh.field.add("Ball")
+        gmsh.model.mesh.field.setNumber(field_tag, "XCenter", float(ball_center[0]))
+        gmsh.model.mesh.field.setNumber(field_tag, "YCenter", float(ball_center[1]))
+        gmsh.model.mesh.field.setNumber(field_tag, "ZCenter", float(ball_center[2]))
+        gmsh.model.mesh.field.setNumber(field_tag, "Radius", refine_r)
+        gmsh.model.mesh.field.setNumber(field_tag, "Thickness", refine_r)  # 반경 밖으로 서서히 원래 크기로 복귀
+        gmsh.model.mesh.field.setNumber(field_tag, "VIn", contact_mesh_size)
+        gmsh.model.mesh.field.setNumber(field_tag, "VOut", MESH_SIZE_TUBE)
+        gmsh.model.mesh.field.setAsBackgroundMesh(field_tag)
+        global_min = min(global_min, contact_mesh_size)
+        if verbose:
+            print(f"  접촉부 국소 세밀화: 볼 중심 {ball_center}, 반경 {refine_r:.2f}mm 안쪽은 "
+                  f"{contact_mesh_size}mm까지, 그 밖은 서서히 {MESH_SIZE_TUBE}mm로 복귀")
+    gmsh.option.setNumber("Mesh.MeshSizeMin", global_min)
     gmsh.option.setNumber("Mesh.MeshSizeMax", MESH_SIZE_TUBE)
     gmsh.model.mesh.generate(3)
     gmsh.model.mesh.setOrder(2)
