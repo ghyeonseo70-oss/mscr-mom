@@ -1,0 +1,33 @@
+s=80 법선(normal)=[-0.18544432 -0.98265477  0.        ]
+
+=== F=0.005mN ===
+  성공! tip_ux=0.5623mm, tip_uy=0.7659mm, 팁변위=0.9502mm (카테터 전체길이 100mm의 1.0%)
+
+=== F=0.05mN ===
+  성공! tip_ux=5.5809mm, tip_uy=6.8044mm, 팁변위=8.8004mm (카테터 전체길이 100mm의 8.8%)
+
+=== F=0.25mN ===
+  성공! tip_ux=21.9218mm, tip_uy=20.2021mm, 팁변위=29.8109mm (카테터 전체길이 100mm의 29.8%)
+
+=== F=1.0mN ===
+  성공! tip_ux=41.5269mm, tip_uy=29.8077mm, 팁변위=51.1174mm (카테터 전체길이 100mm의 51.1%)
+
+=== F=5.0mN ===
+Traceback (most recent call last):
+  File "C:\Users\gustj\Desktop\김현서\김현서\홀센서 코드\현서\scripts\contact_scenarios\fea\_test_force_scan.py", line 90, in <module>
+    result = rc.run_ccx(job_name, timeout=900, n_threads=4)
+  File "C:\Users\gustj\Desktop\김현서\김현서\홀센서 코드\현서\scripts\contact_scenarios\fea\run_contact.py", line 163, in run_ccx
+    result = subprocess.run(
+        ["ccx", job_name], capture_output=True, text=True, cwd=HERE, env=env, timeout=timeout,
+    ...<2 lines>...
+        # 섞여 있어 UnicodeDecodeError로 죽던 문제 - encoding/errors 명시로 방지.
+    )
+  File "C:\Users\gustj\miniconda3\Lib\subprocess.py", line 557, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\miniconda3\Lib\subprocess.py", line 1221, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gustj\miniconda3\Lib\subprocess.py", line 1664, in _communicate
+    raise TimeoutExpired(self.args, orig_timeout)
+subprocess.TimeoutExpired: Command '['ccx', 'matv2_FSCAN_5000']' timed out after 900 seconds
